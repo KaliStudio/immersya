@@ -10,9 +10,10 @@ import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart';
 import 'package:immersya_mobile_app/models/zone_model.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-// --- AJOUT DES IMPORTS POUR LES NOUVEAUX FICHIERS ---
 import 'package:immersya_mobile_app/features/map/state/map_state.dart';
 import 'package:immersya_mobile_app/features/map/widgets/map_filter_chips.dart';
+import 'package:immersya_mobile_app/models/capture_point_model.dart';
+import 'package:immersya_mobile_app/features/map/widgets/heatmap_layer.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -44,6 +45,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   
   List<Zone> _zones = [];
   List<Mission> _missions = [];
+  List<CapturePoint> _capturePoints = [];
   bool _isLoading = true;
 
   @override
@@ -56,9 +58,23 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   Future<void> _initializeMap() async {
     if(mounted) setState(() => _isLoading = true);
-    await Future.wait([_fetchZonesData(), _fetchMissionsData()]);
+    await Future.wait([
+      _fetchZonesData(),
+      _fetchMissionsData(),
+      _fetchCapturePointsData(),
+    ]);
     await _initializeLocationServices();
     if(mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _fetchCapturePointsData() async {
+    try {
+      final apiService = context.read<MockApiService>();
+      final loadedPoints = await apiService.fetchCapturePoints();
+      if (mounted) setState(() => _capturePoints = loadedPoints);
+    } catch (e) {
+      debugPrint("Erreur de chargement des points de capture: $e");
+    }
   }
 
   Future<void> _fetchZonesData() async {
@@ -122,7 +138,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // --- MODIFICATION : On écoute l'état des filtres ---
     final mapState = context.watch<MapState>();
 
     return Scaffold(
@@ -136,7 +151,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             const Padding(padding: EdgeInsets.only(right: 16.0), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
         ],
       ),
-      // --- MODIFICATION : On utilise un Stack pour superposer les filtres ---
       body: Stack(
         children: [
           FlutterMap(
@@ -173,6 +187,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     isFilled: true,
                   )).toList(),
                 ),
+              if (mapState.isFilterActive(MapFilter.heatmap))
+                HeatmapLayer(points: _capturePoints),
               // --- MODIFICATION : Affichage conditionnel de la couche des missions ---
               if (mapState.isFilterActive(MapFilter.missions))
                 MarkerLayer(

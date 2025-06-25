@@ -8,15 +8,15 @@ enum MapFilter {
   zones,
   missions,
   currentUser,
+  heatmap,
 }
 
 class MapState with ChangeNotifier {
-  // Un Map pour stocker l'état (activé/désactivé) de chaque filtre.
-  // On les active tous par défaut.
   final Map<MapFilter, bool> _activeFilters = {
     MapFilter.zones: true,
     MapFilter.missions: true,
     MapFilter.currentUser: true,
+    MapFilter.heatmap: false, // On la désactive par défaut pour ne pas surcharger la vue
   };
 
   // Un getter public pour que l'UI puisse vérifier si un filtre est actif.

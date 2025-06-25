@@ -51,6 +51,8 @@ class MapFilterChips extends StatelessWidget {
         return 'Missions';
       case MapFilter.currentUser:
         return 'Ma Position';
+      case MapFilter.heatmap:
+        return 'Heatmap';
     }
   }
 }

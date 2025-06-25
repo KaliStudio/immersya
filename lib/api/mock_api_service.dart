@@ -2,6 +2,8 @@
 import 'dart:math';
 import 'package:immersya_mobile_app/models/zone_model.dart';
 import 'package:latlong2/latlong.dart';
+import 'dart:math';
+import 'package:immersya_mobile_app/models/capture_point_model.dart';
 
 // ===================================================================
 // DÉFINITION DES MODÈLES DE DONNÉES
@@ -189,4 +191,54 @@ class MockApiService {
       ),
     ];
   }
+
+  Future<List<CapturePoint>> fetchCapturePoints() async {
+    // Simule une latence réseau
+    await Future.delayed(const Duration(milliseconds: 400));
+    
+    // Pour rendre la démo intéressante, on génère des points aléatoires
+    // à l'intérieur des polygones existants.
+    final zones = await fetchZones();
+    final List<CapturePoint> points = [];
+    final random = Random();
+
+    for (final zone in zones) {
+      // On génère plus ou moins de points selon le statut de la zone
+      int pointCount = 0;
+      switch (zone.coverageStatus) {
+        case CoverageStatus.modele: pointCount = 100; break;
+        case CoverageStatus.partiel: pointCount = 40; break;
+        case CoverageStatus.en_cours: pointCount = 15; break;
+        case CoverageStatus.non_couvert: pointCount = 2; break;
+      }
+      
+      for (int i = 0; i < pointCount; i++) {
+        points.add(CapturePoint(location: _generateRandomPointInBounds(zone.polygon, random)));
+      }
+    }
+    return points;
+  }
+
+  // Petite fonction utilitaire pour générer un point dans les limites d'un polygone
+  LatLng _generateRandomPointInBounds(List<LatLng> polygon, Random random) {
+    if (polygon.isEmpty) return const LatLng(0, 0);
+    
+    double minLat = polygon.first.latitude;
+    double maxLat = polygon.first.latitude;
+    double minLng = polygon.first.longitude;
+    double maxLng = polygon.first.longitude;
+
+    for (var p in polygon) {
+      minLat = min(minLat, p.latitude);
+      maxLat = max(maxLat, p.latitude);
+      minLng = min(minLng, p.longitude);
+      maxLng = max(maxLng, p.longitude);
+    }
+
+    final lat = minLat + random.nextDouble() * (maxLat - minLat);
+    final lng = minLng + random.nextDouble() * (maxLng - minLng);
+    
+    return LatLng(lat, lng);
+  }
+
 }
