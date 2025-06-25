@@ -1,7 +1,7 @@
 // lib/features/gallery/screens/gallery_screen.dart
 import 'package:flutter/material.dart';
-import 'package:immersya_pathfinder/api/mock_api_service.dart';
-import 'package:immersya_pathfinder/features/gallery/screens/contribution_detail_screen.dart'; // Import de l'écran de détail
+import 'package:immersya_mobile_app/api/mock_api_service.dart';
+import 'package:immersya_mobile_app/features/gallery/screens/contribution_detail_screen.dart'; // Import de l'écran de détail
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 

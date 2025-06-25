@@ -1,10 +1,10 @@
 // lib/features/shell/screens/main_shell.dart
 import 'package:flutter/material.dart';
-import 'package:immersya_pathfinder/features/capture/screens/capture_screen.dart';
-import 'package:immersya_pathfinder/features/gallery/screens/gallery_screen.dart'; // <-- NOUVEL IMPORT
-import 'package:immersya_pathfinder/features/map/screens/map_screen.dart';
-import 'package:immersya_pathfinder/features/missions/screens/missions_screen.dart';
-import 'package:immersya_pathfinder/features/profile/screens/profile_screen.dart';
+import 'package:immersya_mobile_app/features/capture/screens/capture_screen.dart';
+import 'package:immersya_mobile_app/features/gallery/screens/gallery_screen.dart'; // <-- NOUVEL IMPORT
+import 'package:immersya_mobile_app/features/map/screens/map_screen.dart';
+import 'package:immersya_mobile_app/features/missions/screens/missions_screen.dart';
+import 'package:immersya_mobile_app/features/profile/screens/profile_screen.dart';
 
 final mainShellNavigatorKey = GlobalKey<MainShellState>();
 

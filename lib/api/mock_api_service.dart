@@ -1,11 +1,10 @@
 // lib/api/mock_api_service.dart
 import 'dart:math';
-import 'package:immersya_pathfinder/models/zone_model.dart';
+import 'package:immersya_mobile_app/models/zone_model.dart';
 import 'package:latlong2/latlong.dart';
 
 // ===================================================================
 // DÉFINITION DES MODÈLES DE DONNÉES
-// (Mieux vaut les avoir ici ou dans leurs propres fichiers dans /models)
 // ===================================================================
 
 enum MissionPriority { low, medium, high }
@@ -16,6 +15,7 @@ class Mission {
   final String description;
   final int rewardPoints;
   final MissionPriority priority;
+  final LatLng location; // CHAMP AJOUTÉ
 
   Mission({
     required this.id,
@@ -23,6 +23,7 @@ class Mission {
     required this.description,
     required this.rewardPoints,
     required this.priority,
+    required this.location, // CHAMP AJOUTÉ
   });
 }
 
@@ -98,7 +99,7 @@ class MockApiService {
       CoverageStatus.en_cours,
       CoverageStatus.non_couvert,
     ];
-    const center = LatLng(45.7597, 4.8422);
+    const center = LatLng(49.4922, 0.1131);
     final List<Zone> zones = [];
     const double size = 0.001;
 
@@ -133,6 +134,7 @@ class MockApiService {
     );
   }
 
+  // --- VERSION MODIFIÉE DE fetchMissions ---
   Future<List<Mission>> fetchMissions() async {
     await Future.delayed(const Duration(milliseconds: 600));
     return [
@@ -142,6 +144,7 @@ class MockApiService {
         description: 'Capturez la statue et les façades principales de la place.',
         rewardPoints: 500,
         priority: MissionPriority.high,
+        location: const LatLng(45.7578, 4.8324), // Coordonnées ajoutées
       ),
       Mission(
         id: 'mission_002',
@@ -149,14 +152,13 @@ class MockApiService {
         description: 'Effectuez une capture le long de l\'allée principale.',
         rewardPoints: 350,
         priority: MissionPriority.medium,
+        location: const LatLng(45.7797, 4.8536), // Coordonnées ajoutées
       ),
     ];
   }
   
-  // --- VERSION CORRIGÉE ET COMPLÈTE DE fetchUserContributions ---
   Future<List<Contribution>> fetchUserContributions() async {
     await Future.delayed(const Duration(milliseconds: 700));
-
     return [
       Contribution(
         id: 'scan_001',
@@ -181,32 +183,6 @@ class MockApiService {
         status: ContributionStatus.processing,
         photoCount: 88,
         thumbnailUrl: 'https://i.imgur.com/uNsfA6m.jpg',
-        qualityScore: 0.0,
-        comments: [],
-        model3DUrl: null,
-      ),
-      Contribution(
-        id: 'scan_003',
-        title: 'Scan Libre: Ma Figurine',
-        date: DateTime.now().subtract(const Duration(days: 5)),
-        type: 'Objet',
-        status: ContributionStatus.failed,
-        photoCount: 45,
-        thumbnailUrl: 'https://i.imgur.com/3Z3SoM0.jpg',
-        qualityScore: 0.0,
-        comments: [
-           ContributionComment(username: "Support", comment: "La reconstruction a échoué. Essayez avec un meilleur éclairage.", date: DateTime.now().subtract(const Duration(days: 4))),
-        ],
-        model3DUrl: null,
-      ),
-       Contribution(
-        id: 'scan_004',
-        title: 'Mission: Documenter le Parc',
-        date: DateTime.now().subtract(const Duration(days: 10)),
-        type: 'Mission',
-        status: ContributionStatus.pending,
-        photoCount: 210,
-        thumbnailUrl: 'https://i.imgur.com/h5EaA0j.jpg',
         qualityScore: 0.0,
         comments: [],
         model3DUrl: null,

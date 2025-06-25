@@ -1,9 +1,9 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:immersya_pathfinder/api/mock_api_service.dart';
-import 'package:immersya_pathfinder/app.dart';
-import 'package:immersya_pathfinder/features/capture/capture_state.dart'; // Importer le nouvel état
+import 'package:immersya_mobile_app/api/mock_api_service.dart';
+import 'package:immersya_mobile_app/app.dart';
+import 'package:immersya_mobile_app/features/capture/capture_state.dart'; // Importer le nouvel état
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();

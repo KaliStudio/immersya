@@ -1,7 +1,8 @@
 // lib/features/profile/screens/profile_screen.dart
 import 'package:flutter/material.dart';
-import 'package:immersya_pathfinder/api/mock_api_service.dart';
-import 'package:immersya_pathfinder/features/profile/screens/settings_screen.dart';
+import 'package:immersya_mobile_app/api/mock_api_service.dart';
+import 'package:immersya_mobile_app/features/capture/capture_state.dart';
+import 'package:immersya_mobile_app/features/profile/screens/settings_screen.dart';
 import 'package:provider/provider.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -13,26 +14,59 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Future<UserProfile>? _userProfileFuture;
+  UserProfile? _currentProfile;
+  late CaptureState _captureState;
 
   @override
   void initState() {
     super.initState();
-    // Charger les données du profil au démarrage de l'écran
-    _loadProfileData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProfileData();
+      
+      // Initialiser et écouter CaptureState
+      _captureState = context.read<CaptureState>();
+      _captureState.addListener(_onCaptureStateChanged);
+    });
+  }
+
+  @override
+  void dispose() {
+    _captureState.removeListener(_onCaptureStateChanged);
+    super.dispose();
+  }
+
+  void _onCaptureStateChanged() {
+    if (_captureState.lastGainedPoints > 0 && _currentProfile != null) {
+      if (mounted) {
+        setState(() {
+          _currentProfile = UserProfile(
+            username: _currentProfile!.username,
+            rank: _currentProfile!.rank,
+            areaCoveredKm2: _currentProfile!.areaCoveredKm2,
+            scansValidated: _currentProfile!.scansValidated + 1, // On incrémente aussi les scans
+            immersyaPoints: _currentProfile!.immersyaPoints + _captureState.lastGainedPoints,
+          );
+        });
+      }
+    }
   }
 
   void _loadProfileData() {
-    final apiService = context.read<MockApiService>();
-    _userProfileFuture = apiService.fetchUserProfile();
+    if(mounted) {
+      final apiService = context.read<MockApiService>();
+      setState(() {
+         _userProfileFuture = apiService.fetchUserProfile();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Mon Profil'),
-          centerTitle: true,
-          actions: [
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mon Profil'),
+        centerTitle: true,
+        actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () {
@@ -47,18 +81,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: FutureBuilder<UserProfile>(
         future: _userProfileFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting && _currentProfile == null) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
             return Center(child: Text('Erreur: ${snapshot.error}'));
           }
-          if (!snapshot.hasData) {
+          if (snapshot.hasData && _currentProfile == null) {
+            _currentProfile = snapshot.data;
+          }
+          if (_currentProfile == null) {
             return const Center(child: Text('Aucun profil trouvé.'));
           }
 
-          final profile = snapshot.data!;
-          return _buildProfileView(profile);
+          return _buildProfileView(_currentProfile!);
         },
       ),
     );
@@ -67,15 +103,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileView(UserProfile profile) {
     final theme = Theme.of(context);
     return RefreshIndicator(
-      onRefresh: () async {
-        setState(() {
-          _loadProfileData();
-        });
-      },
+      onRefresh: () async { _loadProfileData(); },
       child: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Section d'identité
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -103,8 +134,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          
-          // Section des statistiques
           Text('Statistiques', style: theme.textTheme.titleLarge),
           const SizedBox(height: 16),
           _buildStatCard(

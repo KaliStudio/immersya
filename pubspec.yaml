@@ -1,4 +1,4 @@
-name: immersya_pathfinder
+name: immersya_mobile_app
 description: "A virtual world where everything is possible."
 publish_to: 'none' 
 version: 1.0.0+1
@@ -35,6 +35,8 @@ dependencies:
   intl: ^0.18.1 # ou la version la plus récente
   model_viewer_plus: ^1.7.0 # ou la version la plus récente
   shared_preferences: ^2.2.3 # ou la version la plus récente
+  flutter_launcher_icons: ^0.13.1 # ou la version la plus récente
+  polygon: ^0.1.0
 
 dev_dependencies:
   flutter_test:
@@ -44,4 +46,15 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/cesium/
+    - assets/icon/
+
+flutter_launcher_icons:
+  # --- Configuration pour Android ---
+  android: "launcher_icon" # Nom de l'icône pour Android (garder cette valeur)
+  image_path: "assets/icon/icon.png" # Chemin vers VOTRE image
+  min_sdk_android: 21 # SDK minimum pour les icônes adaptatives
+
+  # --- Configuration pour iOS ---
+  ios: true # Activer la génération pour iOS
+  image_path_ios: "assets/icon/icon.png" # Vous pouvez spécifier une icône différente si besoin
+  remove_alpha_ios: true # iOS n'aime pas la transparence alpha sur l'icône principale

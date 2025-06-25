@@ -1,12 +1,16 @@
 // lib/features/map/screens/map_screen.dart
-import 'dart:async'; // Import pour le StreamSubscription
+
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart'; // Import pour la géolocalisation
-import 'package:immersya_pathfinder/api/mock_api_service.dart';
-import 'package:immersya_pathfinder/models/zone_model.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:immersya_mobile_app/api/mock_api_service.dart'; // NOM DU PACKAGE CORRIGÉ
+import 'package:immersya_mobile_app/features/capture/capture_state.dart'; // NOM DU PACKAGE CORRIGÉ
+import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart'; // NOM DU PACKAGE CORRIGÉ
+import 'package:immersya_mobile_app/models/zone_model.dart'; // NOM DU PACKAGE CORRIGÉ
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:polygon/polygon.dart' as polygon_helper; // Package pour aider à la détection du clic
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -15,111 +19,91 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin { // Ajout de TickerProviderStateMixin pour les animations
-  // --- NOUVEAUTÉS ---
-  final MapController _mapController = MapController(); // Contrôleur pour manipuler la carte
-  StreamSubscription<Position>? _positionStreamSubscription; // Pour écouter le GPS
-  LatLng? _currentUserPosition; // Position actuelle de l'utilisateur
-
-  // --- ANCIENNES PROPRIÉTÉS ---
+class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
+  final MapController _mapController = MapController();
+  StreamSubscription<Position>? _positionStreamSubscription;
+  LatLng? _currentUserPosition;
+  
   List<Zone> _zones = [];
+  List<Mission> _missions = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _initializeMap();
-  }
-  
-  // Fonction d'initialisation principale
-  Future<void> _initializeMap() async {
-    await _fetchZonesData(); // Charger les polygones
-    await _initializeLocationServices(); // Démarrer le suivi GPS
+    // Utiliser addPostFrameCallback pour appeler le Provider après la construction initiale
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeMap();
+    });
   }
 
-  // Fonction pour charger les données de notre API
+  Future<void> _initializeMap() async {
+    if(mounted) setState(() => _isLoading = true);
+    await Future.wait([
+      _fetchZonesData(),
+      _fetchMissionsData(),
+    ]);
+    await _initializeLocationServices();
+    if(mounted) setState(() => _isLoading = false);
+  }
+
   Future<void> _fetchZonesData() async {
-    setState(() => _isLoading = true);
     try {
       final apiService = context.read<MockApiService>();
-      _zones = await apiService.fetchZones();
-    } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+        final loadedZones = await apiService.fetchZones();
+        setState(() => _zones = loadedZones);
       }
-    } finally {
-      if(mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      print("Erreur de chargement des zones: $e");
     }
   }
 
-  // --- NOUVEAU : GESTION DU GPS ---
+  Future<void> _fetchMissionsData() async {
+    try {
+      final apiService = context.read<MockApiService>();
+      if (mounted) {
+        final loadedMissions = await apiService.fetchMissions();
+        setState(() => _missions = loadedMissions);
+      }
+    } catch (e) {
+      print("Erreur de chargement des missions: $e");
+    }
+  }
+
   Future<void> _initializeLocationServices() async {
     bool serviceEnabled;
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      // Gérer le cas où la localisation est désactivée
-      return;
-    }
+    if (!serviceEnabled) return;
 
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        // Gérer le refus de permission
-        return;
-      }
+      if (permission == LocationPermission.denied) return;
     }
     
-    // Écouter le flux de positions GPS
     _positionStreamSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10)
     ).listen((Position position) {
       if(mounted) {
+        if(_currentUserPosition == null) { // Pour le premier centrage
+            _mapController.move(LatLng(position.latitude, position.longitude), 17.0);
+        }
         setState(() {
           _currentUserPosition = LatLng(position.latitude, position.longitude);
         });
-        // Centrer la carte sur la nouvelle position de l'utilisateur
-        _animatedMapMove(_currentUserPosition!, 17.0);
       }
     });
-  }
-
-  // Fonction pour un déplacement animé de la carte
-  void _animatedMapMove(LatLng destLocation, double destZoom) {
-    final latTween = Tween<double>(begin: _mapController.camera.center.latitude, end: destLocation.latitude);
-    final lngTween = Tween<double>(begin: _mapController.camera.center.longitude, end: destLocation.longitude);
-    final zoomTween = Tween<double>(begin: _mapController.camera.zoom, end: destZoom);
-
-    final controller = AnimationController(duration: const Duration(milliseconds: 500), vsync: this);
-    final animation = CurvedAnimation(parent: controller, curve: Curves.fastOutSlowIn);
-
-    controller.addListener(() {
-      _mapController.move(
-        LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
-        zoomTween.evaluate(animation),
-      );
-    });
-
-    animation.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        controller.dispose();
-      } else if (status == AnimationStatus.dismissed) {
-        controller.dispose();
-      }
-    });
-
-    controller.forward();
   }
 
   @override
   void dispose() {
-    _positionStreamSubscription?.cancel(); // Très important de couper l'écoute GPS
+    _positionStreamSubscription?.cancel();
     super.dispose();
   }
 
-  // ... (La fonction _getColorForStatus ne change pas)
   Color _getColorForStatus(CoverageStatus status) {
     switch (status) {
       case CoverageStatus.modele: return Colors.green.withOpacity(0.5);
@@ -134,33 +118,47 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin { /
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Immersya'),
+        title: const Text('Immersya Pathfinder'),
         centerTitle: true,
         actions: [
           if (!_isLoading)
             IconButton(
               icon: const Icon(Icons.sync),
-              onPressed: _fetchZonesData,
+              onPressed: _initializeMap,
             ),
           if (_isLoading)
             const Padding(padding: EdgeInsets.only(right: 16.0), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
         ],
       ),
       body: FlutterMap(
-        mapController: _mapController, // Lier le contrôleur à la carte
+        mapController: _mapController,
+        // --- CORRECTION DE LA GESTION DU TAP ICI ---
         options: MapOptions(
-          initialCenter: _currentUserPosition ?? const LatLng(45.7597, 4.8422), // Centre initial sur le GPS ou Lyon
-          initialZoom: _currentUserPosition != null ? 17.0 : 15.0,
+          initialCenter: _currentUserPosition ?? const LatLng(45.7597, 4.8422),
+          initialZoom: 15.0,
+          onTap: (tapPosition, point) {
+            // On vérifie chaque polygone pour voir si le clic est dedans
+            for (final zone in _zones) {
+              final polygon = polygon_helper.Polygon(
+                zone.polygon.map((p) => polygon_helper.Point(p.latitude, p.longitude)).toList()
+              );
+              final isInside = polygon.contains(point.latitude, point.longitude);
+              if (isInside) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Vous avez tapé sur la zone : ${zone.id}')),
+                );
+                // On arrête la boucle dès qu'on a trouvé un polygone
+                break;
+              }
+            }
+          },
         ),
         children: [
-          // --- NOUVEAU : STYLE DE CARTE SOMBRE ---
           TileLayer(
-            // Utiliser le fond de carte "Dark" de CartoDB pour le style
             urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
             subdomains: const ['a', 'b', 'c', 'd'],
             retinaMode: true,
           ),
-          
           PolygonLayer(
             polygons: _zones.map((zone) {
               return Polygon(
@@ -171,9 +169,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin { /
                 isFilled: true,
               );
             }).toList(),
+            // On a supprimé le 'onTap' d'ici car il n'existe pas
           ),
-
-          // --- NOUVEAU : MARQUEUR DU JOUEUR ---
+          MarkerLayer(
+            markers: _missions.map((mission) {
+              return Marker(
+                width: 120,
+                height: 80,
+                point: mission.location,
+                child: MissionMarker(mission: mission),
+              );
+            }).toList(),
+          ),
           if (_currentUserPosition != null)
             MarkerLayer(
               markers: [
@@ -181,7 +188,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin { /
                   width: 80.0,
                   height: 80.0,
                   point: _currentUserPosition!,
-                  child: PlayerMarker(), // Utiliser notre widget personnalisé
+                  child: const PlayerMarker(),
                 ),
               ],
             ),
@@ -191,12 +198,83 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin { /
   }
 }
 
-// --- NOUVEAU : WIDGET POUR LE MARQUEUR DU JOUEUR ---
+
+// --- Widgets MissionMarker et PlayerMarker (INCHANGÉS) ---
+
+class MissionMarker extends StatelessWidget {
+  final Mission mission;
+  const MissionMarker({super.key, required this.mission});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (ctx) => _buildMissionDetailsSheet(ctx, mission),
+        );
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white, width: 1),
+            ),
+            child: Text(
+              mission.title,
+              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const Icon(Icons.flag, color: Colors.redAccent, size: 30),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMissionDetailsSheet(BuildContext context, Mission mission) {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(mission.title, style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Text(mission.description, style: TextStyle(color: Colors.grey[400])),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              context.read<CaptureState>().startMission(mission);
+              mainShellNavigatorKey.currentState?.goToTab(1);
+            },
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 50),
+            ),
+            child: const Text('Accepter et Lancer la Capture'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class PlayerMarker extends StatefulWidget {
   const PlayerMarker({super.key});
 
   @override
-  _PlayerMarkerState createState() => _PlayerMarkerState();
+  State<PlayerMarker> createState() => _PlayerMarkerState();
 }
 
 class _PlayerMarkerState extends State<PlayerMarker> with SingleTickerProviderStateMixin {
@@ -225,7 +303,6 @@ class _PlayerMarkerState extends State<PlayerMarker> with SingleTickerProviderSt
         return Stack(
           alignment: Alignment.center,
           children: [
-            // Onde de pulsation externe
             Container(
               width: 24 * (1 + _animationController.value),
               height: 24 * (1 + _animationController.value),
@@ -234,7 +311,6 @@ class _PlayerMarkerState extends State<PlayerMarker> with SingleTickerProviderSt
                 color: Colors.blue.withOpacity(0.5 * (1 - _animationController.value)),
               ),
             ),
-            // Point central
             Container(
               width: 18,
               height: 18,

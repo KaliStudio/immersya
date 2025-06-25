@@ -1,7 +1,7 @@
 // lib/app.dart
 import 'package:flutter/material.dart';
-import 'package:immersya_pathfinder/features/shell/screens/main_shell.dart';
-import 'package:immersya_pathfinder/utils/app_theme.dart';
+import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart';
+import 'package:immersya_mobile_app/utils/app_theme.dart';
 
 class ImmersyaPathfinderApp extends StatelessWidget {
   const ImmersyaPathfinderApp({super.key});

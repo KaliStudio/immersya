@@ -1,8 +1,8 @@
 // lib/features/capture/screens/capture_screen.dart
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:immersya_pathfinder/features/capture/capture_state.dart';
-import 'package:immersya_pathfinder/features/shell/screens/main_shell.dart';
+import 'package:immersya_mobile_app/features/capture/capture_state.dart';
+import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 

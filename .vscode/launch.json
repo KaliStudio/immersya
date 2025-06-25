@@ -5,18 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "immersya_pathfinder",
+            "name": "immersya_mobile_app",
             "request": "launch",
             "type": "dart"
         },
         {
-            "name": "immersya_pathfinder (profile mode)",
+            "name": "immersya_mobile_app (profile mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "profile"
         },
         {
-            "name": "immersya_pathfinder (release mode)",
+            "name": "immersya_mobile_app (release mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "release"

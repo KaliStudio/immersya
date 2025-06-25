@@ -1,8 +1,8 @@
 // lib/features/missions/screens/missions_screen.dart
 import 'package:flutter/material.dart';
-import 'package:immersya_pathfinder/api/mock_api_service.dart';
-import 'package:immersya_pathfinder/features/capture/capture_state.dart';
-import 'package:immersya_pathfinder/features/shell/screens/main_shell.dart';
+import 'package:immersya_mobile_app/api/mock_api_service.dart';
+import 'package:immersya_mobile_app/features/capture/capture_state.dart';
+import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart';
 import 'package:provider/provider.dart';
 
 class MissionsScreen extends StatefulWidget {
