@@ -4,19 +4,37 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:immersya_mobile_app/api/mock_api_service.dart'; // NOM DU PACKAGE CORRIGÉ
-import 'package:immersya_mobile_app/features/capture/capture_state.dart'; // NOM DU PACKAGE CORRIGÉ
-import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart'; // NOM DU PACKAGE CORRIGÉ
-import 'package:immersya_mobile_app/models/zone_model.dart'; // NOM DU PACKAGE CORRIGÉ
+import 'package:immersya_mobile_app/api/mock_api_service.dart';
+import 'package:immersya_mobile_app/features/capture/capture_state.dart';
+import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart';
+import 'package:immersya_mobile_app/models/zone_model.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-import 'package:polygon/polygon.dart' as polygon_helper; // Package pour aider à la détection du clic
+// --- AJOUT DES IMPORTS POUR LES NOUVEAUX FICHIERS ---
+import 'package:immersya_mobile_app/features/map/state/map_state.dart';
+import 'package:immersya_mobile_app/features/map/widgets/map_filter_chips.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
+}
+
+// NOTE: Cet algo simple fonctionne pour les polygones convexes. Pour plus de robustesse, 
+// un package comme 'polygon' est recommandé car il gère les cas complexes.
+bool isPointInPolygon(LatLng point, List<LatLng> polygon) {
+  int intersectCount = 0;
+  for (int j = 0; j < polygon.length - 1; j++) {
+    final p1 = polygon[j];
+    final p2 = polygon[j + 1];
+
+    if (((p1.latitude > point.latitude) != (p2.latitude > point.latitude)) &&
+        (point.longitude < (p2.longitude - p1.longitude) * (point.latitude - p1.latitude) / (p2.latitude - p1.latitude) + p1.longitude)) {
+      intersectCount++;
+    }
+  }
+  return (intersectCount % 2 == 1);
 }
 
 class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
@@ -31,7 +49,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    // Utiliser addPostFrameCallback pour appeler le Provider après la construction initiale
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeMap();
     });
@@ -39,10 +56,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   Future<void> _initializeMap() async {
     if(mounted) setState(() => _isLoading = true);
-    await Future.wait([
-      _fetchZonesData(),
-      _fetchMissionsData(),
-    ]);
+    await Future.wait([_fetchZonesData(), _fetchMissionsData()]);
     await _initializeLocationServices();
     if(mounted) setState(() => _isLoading = false);
   }
@@ -50,35 +64,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Future<void> _fetchZonesData() async {
     try {
       final apiService = context.read<MockApiService>();
-      if (mounted) {
-        final loadedZones = await apiService.fetchZones();
-        setState(() => _zones = loadedZones);
-      }
+      final loadedZones = await apiService.fetchZones();
+      if (mounted) setState(() => _zones = loadedZones);
     } catch (e) {
-      print("Erreur de chargement des zones: $e");
+      debugPrint("Erreur de chargement des zones: $e");
     }
   }
 
   Future<void> _fetchMissionsData() async {
     try {
       final apiService = context.read<MockApiService>();
-      if (mounted) {
-        final loadedMissions = await apiService.fetchMissions();
-        setState(() => _missions = loadedMissions);
-      }
+      final loadedMissions = await apiService.fetchMissions();
+      if (mounted) setState(() => _missions = loadedMissions);
     } catch (e) {
-      print("Erreur de chargement des missions: $e");
+      debugPrint("Erreur de chargement des missions: $e");
     }
   }
 
   Future<void> _initializeLocationServices() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
@@ -88,12 +95,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10)
     ).listen((Position position) {
       if(mounted) {
-        if(_currentUserPosition == null) { // Pour le premier centrage
-            _mapController.move(LatLng(position.latitude, position.longitude), 17.0);
+        final newPosition = LatLng(position.latitude, position.longitude);
+        if(_currentUserPosition == null) {
+            _mapController.move(newPosition, 17.0);
         }
-        setState(() {
-          _currentUserPosition = LatLng(position.latitude, position.longitude);
-        });
+        setState(() => _currentUserPosition = newPosition);
       }
     });
   }
@@ -116,91 +122,91 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // --- MODIFICATION : On écoute l'état des filtres ---
+    final mapState = context.watch<MapState>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Immersya Pathfinder'),
         centerTitle: true,
         actions: [
           if (!_isLoading)
-            IconButton(
-              icon: const Icon(Icons.sync),
-              onPressed: _initializeMap,
-            ),
+            IconButton(icon: const Icon(Icons.sync), onPressed: _initializeMap),
           if (_isLoading)
             const Padding(padding: EdgeInsets.only(right: 16.0), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
         ],
       ),
-      body: FlutterMap(
-        mapController: _mapController,
-        // --- CORRECTION DE LA GESTION DU TAP ICI ---
-        options: MapOptions(
-          initialCenter: _currentUserPosition ?? const LatLng(45.7597, 4.8422),
-          initialZoom: 15.0,
-          onTap: (tapPosition, point) {
-            // On vérifie chaque polygone pour voir si le clic est dedans
-            for (final zone in _zones) {
-              final polygon = polygon_helper.Polygon(
-                zone.polygon.map((p) => polygon_helper.Point(p.latitude, p.longitude)).toList()
-              );
-              final isInside = polygon.contains(point.latitude, point.longitude);
-              if (isInside) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Vous avez tapé sur la zone : ${zone.id}')),
-                );
-                // On arrête la boucle dès qu'on a trouvé un polygone
-                break;
-              }
-            }
-          },
-        ),
+      // --- MODIFICATION : On utilise un Stack pour superposer les filtres ---
+      body: Stack(
         children: [
-          TileLayer(
-            urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-            subdomains: const ['a', 'b', 'c', 'd'],
-            retinaMode: true,
-          ),
-          PolygonLayer(
-            polygons: _zones.map((zone) {
-              return Polygon(
-                points: zone.polygon,
-                color: _getColorForStatus(zone.coverageStatus),
-                borderColor: _getColorForStatus(zone.coverageStatus).withOpacity(0.8),
-                borderStrokeWidth: 1.5,
-                isFilled: true,
-              );
-            }).toList(),
-            // On a supprimé le 'onTap' d'ici car il n'existe pas
-          ),
-          MarkerLayer(
-            markers: _missions.map((mission) {
-              return Marker(
-                width: 120,
-                height: 80,
-                point: mission.location,
-                child: MissionMarker(mission: mission),
-              );
-            }).toList(),
-          ),
-          if (_currentUserPosition != null)
-            MarkerLayer(
-              markers: [
-                Marker(
-                  width: 80.0,
-                  height: 80.0,
-                  point: _currentUserPosition!,
-                  child: const PlayerMarker(),
-                ),
-              ],
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _currentUserPosition ?? const LatLng(45.7597, 4.8422),
+              initialZoom: 15.0,
+              onTap: (tapPosition, point) {
+                if (!mapState.isFilterActive(MapFilter.zones)) return;
+                for (final zone in _zones) {
+                  if (isPointInPolygon(point, zone.polygon)) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Zone sélectionnée : ${zone.id}')),
+                    );
+                    break;
+                  }
+                }
+              },
             ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
+                retinaMode: true,
+              ),
+              // --- MODIFICATION : Affichage conditionnel de la couche des zones ---
+              if (mapState.isFilterActive(MapFilter.zones))
+                PolygonLayer(
+                  polygons: _zones.map((zone) => Polygon(
+                    points: zone.polygon,
+                    color: _getColorForStatus(zone.coverageStatus),
+                    borderColor: _getColorForStatus(zone.coverageStatus).withOpacity(0.8),
+                    borderStrokeWidth: 1.5,
+                    isFilled: true,
+                  )).toList(),
+                ),
+              // --- MODIFICATION : Affichage conditionnel de la couche des missions ---
+              if (mapState.isFilterActive(MapFilter.missions))
+                MarkerLayer(
+                  markers: _missions.map((mission) => Marker(
+                    width: 120,
+                    height: 80,
+                    point: mission.location,
+                    child: MissionMarker(mission: mission),
+                  )).toList(),
+                ),
+              // --- MODIFICATION : Affichage conditionnel du joueur ---
+              if (_currentUserPosition != null && mapState.isFilterActive(MapFilter.currentUser))
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      width: 80.0,
+                      height: 80.0,
+                      point: _currentUserPosition!,
+                      child: const PlayerMarker(),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          // --- AJOUT : Le widget des filtres superposé à la carte ---
+          const MapFilterChips(),
         ],
       ),
     );
   }
 }
 
-
-// --- Widgets MissionMarker et PlayerMarker (INCHANGÉS) ---
-
+// --- Les widgets MissionMarker et PlayerMarker restent INCHANGÉS ---
+// (Le code de ces widgets est identique à celui que vous avez fourni)
 class MissionMarker extends StatelessWidget {
   final Mission mission;
   const MissionMarker({super.key, required this.mission});
