@@ -1,4 +1,4 @@
-# Immersya Pathfinder – Application Mobile de Capture 3D Participative
+# Immersya – Application Mobile de Capture 3D Participative
 
 **Immersya Mobile** est une application mobile Flutter conçue comme l'outil de terrain de la plateforme IMMERSYA.  
 Elle permet aux utilisateurs de capturer le monde réel en 3D, de suivre des missions géolocalisées, de visualiser leurs contributions sur une carte interactive, et de participer à un écosystème collaboratif.
