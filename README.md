@@ -114,5 +114,5 @@ L'application dépasse le stade de prototype. Elle constitue un MVP fonctionnel,
 
 ## Licence
 
-MIT © Immersya 2025
+© Immersya 2025
 
