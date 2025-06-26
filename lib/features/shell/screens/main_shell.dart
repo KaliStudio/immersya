@@ -76,7 +76,8 @@ class MainShellState extends State<MainShell> {
           ),
         ],
         currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
+        onTap: goToTab,
+        type: BottomNavigationBarType.fixed,
       ),
     );
   }

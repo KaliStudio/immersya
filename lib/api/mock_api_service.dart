@@ -2,11 +2,11 @@
 import 'dart:math';
 import 'package:immersya_mobile_app/models/zone_model.dart';
 import 'package:latlong2/latlong.dart';
-import 'dart:math';
 import 'package:immersya_mobile_app/models/capture_point_model.dart';
 import 'package:immersya_mobile_app/models/ghost_trace_model.dart';
+
 // ===================================================================
-// DÉFINITION DES MODÈLES DE DONNÉES
+// DÉFINITION DES MODÈLES DE DONNÉES (INCHANGÉ)
 // ===================================================================
 
 enum MissionPriority { low, medium, high }
@@ -17,7 +17,7 @@ class Mission {
   final String description;
   final int rewardPoints;
   final MissionPriority priority;
-  final LatLng location; // CHAMP AJOUTÉ
+  final LatLng location;
 
   Mission({
     required this.id,
@@ -25,7 +25,7 @@ class Mission {
     required this.description,
     required this.rewardPoints,
     required this.priority,
-    required this.location, // CHAMP AJOUTÉ
+    required this.location,
   });
 }
 
@@ -93,6 +93,47 @@ class Contribution {
 class MockApiService {
   final _random = Random();
 
+  // --- MODIFICATION : Simulation d'une base de données de profils ---
+  // La clé est l'ID de l'utilisateur (fourni par AuthService), la valeur est son profil.
+  final Map<String, UserProfile> _userProfiles = {
+    // Profil pour l'utilisateur de démo (ID '1' dans AuthService)
+    '1': UserProfile(
+      username: "Pathfinder_Demo",
+      rank: "Cartographe de Bronze",
+      immersyaPoints: 12540,
+      areaCoveredKm2: 2.5,
+      scansValidated: 87,
+    ),
+    // On pourrait ajouter d'autres profils pour d'autres utilisateurs ici.
+  };
+
+  // --- MODIFICATION : La méthode `fetchUserProfile` prend maintenant un `userId` ---
+  Future<UserProfile> fetchUserProfile({required String userId}) async {
+    print('API: Recherche du profil pour l\'utilisateur ID: $userId');
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (_userProfiles.containsKey(userId)) {
+      // Si l'utilisateur a déjà un profil, on le retourne.
+      return _userProfiles[userId]!;
+    } else {
+      // Sinon (par exemple, pour un nouvel utilisateur qui vient de s'inscrire),
+      // on lui crée et retourne un profil par défaut.
+      print('API: Aucun profil trouvé pour l\'ID $userId. Création d\'un profil par défaut.');
+      final newProfile = UserProfile(
+        username: "Nouvelle Recrue", // Ce nom devrait être synchronisé avec AuthService dans un vrai projet
+        rank: "Aspirant",
+        immersyaPoints: 0,
+        areaCoveredKm2: 0.0,
+        scansValidated: 0,
+      );
+      // On le sauvegarde pour les futurs appels.
+      _userProfiles[userId] = newProfile;
+      return newProfile;
+    }
+  }
+
+  // --- LE RESTE DE VOS MÉTHODES D'API EST CONSERVÉ À L'IDENTIQUE ---
+
   Future<List<Zone>> fetchZones() async {
     await Future.delayed(const Duration(milliseconds: 500));
     final statuses = [
@@ -125,18 +166,6 @@ class MockApiService {
     return zones;
   }
 
-  Future<UserProfile> fetchUserProfile() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    return UserProfile(
-      username: "Pathfinder_01",
-      rank: "Cartographe de Bronze",
-      immersyaPoints: 12540,
-      areaCoveredKm2: 2.5,
-      scansValidated: 87,
-    );
-  }
-
-  // --- VERSION MODIFIÉE DE fetchMissions ---
   Future<List<Mission>> fetchMissions() async {
     await Future.delayed(const Duration(milliseconds: 600));
     return [
@@ -146,7 +175,7 @@ class MockApiService {
         description: 'Capturez la statue et les façades principales de la place.',
         rewardPoints: 500,
         priority: MissionPriority.high,
-        location: const LatLng(45.7578, 4.8324), // Coordonnées ajoutées
+        location: const LatLng(45.7578, 4.8324),
       ),
       Mission(
         id: 'mission_002',
@@ -154,7 +183,7 @@ class MockApiService {
         description: 'Effectuez une capture le long de l\'allée principale.',
         rewardPoints: 350,
         priority: MissionPriority.medium,
-        location: const LatLng(45.7797, 4.8536), // Coordonnées ajoutées
+        location: const LatLng(45.7797, 4.8536),
       ),
     ];
   }
@@ -193,17 +222,11 @@ class MockApiService {
   }
 
   Future<List<CapturePoint>> fetchCapturePoints() async {
-    // Simule une latence réseau
     await Future.delayed(const Duration(milliseconds: 400));
-    
-    // Pour rendre la démo intéressante, on génère des points aléatoires
-    // à l'intérieur des polygones existants.
     final zones = await fetchZones();
     final List<CapturePoint> points = [];
     final random = Random();
-
     for (final zone in zones) {
-      // On génère plus ou moins de points selon le statut de la zone
       int pointCount = 0;
       switch (zone.coverageStatus) {
         case CoverageStatus.modele: pointCount = 100; break;
@@ -211,7 +234,6 @@ class MockApiService {
         case CoverageStatus.en_cours: pointCount = 15; break;
         case CoverageStatus.non_couvert: pointCount = 2; break;
       }
-      
       for (int i = 0; i < pointCount; i++) {
         points.add(CapturePoint(location: _generateRandomPointInBounds(zone.polygon, random)));
       }
@@ -219,31 +241,8 @@ class MockApiService {
     return points;
   }
 
-  // Petite fonction utilitaire pour générer un point dans les limites d'un polygone
-  LatLng _generateRandomPointInBounds(List<LatLng> polygon, Random random) {
-    if (polygon.isEmpty) return const LatLng(0, 0);
-    
-    double minLat = polygon.first.latitude;
-    double maxLat = polygon.first.latitude;
-    double minLng = polygon.first.longitude;
-    double maxLng = polygon.first.longitude;
-
-    for (var p in polygon) {
-      minLat = min(minLat, p.latitude);
-      maxLat = max(maxLat, p.latitude);
-      minLng = min(minLng, p.longitude);
-      maxLng = max(maxLng, p.longitude);
-    }
-
-    final lat = minLat + random.nextDouble() * (maxLat - minLat);
-    final lng = minLng + random.nextDouble() * (maxLng - minLng);
-    
-    return LatLng(lat, lng);
-  }
- Future<List<GhostTrace>> fetchGhostTraces() async {
+  Future<List<GhostTrace>> fetchGhostTraces() async {
     await Future.delayed(const Duration(milliseconds: 300));
-    
-    // On génère 3 traces de démonstration qui serpentent
     return [
       _generateWavyTrace("trace_1", const LatLng(45.762, 4.845), 20, 0.001),
       _generateWavyTrace("trace_2", const LatLng(45.758, 4.840), 30, 0.0015),
@@ -251,15 +250,32 @@ class MockApiService {
     ];
   }
 
-  // Fonction utilitaire pour générer un parcours qui serpente
+  // --- VOS FONCTIONS UTILITAIRES SONT CONSERVÉES ---
+
+  LatLng _generateRandomPointInBounds(List<LatLng> polygon, Random random) {
+    if (polygon.isEmpty) return const LatLng(0, 0);
+    double minLat = polygon.first.latitude;
+    double maxLat = polygon.first.latitude;
+    double minLng = polygon.first.longitude;
+    double maxLng = polygon.first.longitude;
+    for (var p in polygon) {
+      minLat = min(minLat, p.latitude);
+      maxLat = max(maxLat, p.latitude);
+      minLng = min(minLng, p.longitude);
+      maxLng = max(maxLng, p.longitude);
+    }
+    final lat = minLat + random.nextDouble() * (maxLat - minLat);
+    final lng = minLng + random.nextDouble() * (maxLng - minLng);
+    return LatLng(lat, lng);
+  }
+
   GhostTrace _generateWavyTrace(String id, LatLng start, int points, double amplitude) {
     final List<LatLng> path = [];
     for (int i = 0; i < points; i++) {
-      final lat = start.latitude + (i * 0.0001); // Avance vers le nord
-      final lng = start.longitude + (sin(i * 0.5) * amplitude); // Serpente d'est en ouest
+      final lat = start.latitude + (i * 0.0001);
+      final lng = start.longitude + (sin(i * 0.5) * amplitude);
       path.add(LatLng(lat, lng));
     }
     return GhostTrace(id: id, path: path);
   }
-  
 }
