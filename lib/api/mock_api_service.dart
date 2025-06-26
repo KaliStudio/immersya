@@ -4,7 +4,7 @@ import 'package:immersya_mobile_app/models/zone_model.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:math';
 import 'package:immersya_mobile_app/models/capture_point_model.dart';
-
+import 'package:immersya_mobile_app/models/ghost_trace_model.dart';
 // ===================================================================
 // DÉFINITION DES MODÈLES DE DONNÉES
 // ===================================================================
@@ -240,5 +240,26 @@ class MockApiService {
     
     return LatLng(lat, lng);
   }
+ Future<List<GhostTrace>> fetchGhostTraces() async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    // On génère 3 traces de démonstration qui serpentent
+    return [
+      _generateWavyTrace("trace_1", const LatLng(45.762, 4.845), 20, 0.001),
+      _generateWavyTrace("trace_2", const LatLng(45.758, 4.840), 30, 0.0015),
+      _generateWavyTrace("trace_3", const LatLng(45.756, 4.848), 15, 0.0008),
+    ];
+  }
 
+  // Fonction utilitaire pour générer un parcours qui serpente
+  GhostTrace _generateWavyTrace(String id, LatLng start, int points, double amplitude) {
+    final List<LatLng> path = [];
+    for (int i = 0; i < points; i++) {
+      final lat = start.latitude + (i * 0.0001); // Avance vers le nord
+      final lng = start.longitude + (sin(i * 0.5) * amplitude); // Serpente d'est en ouest
+      path.add(LatLng(lat, lng));
+    }
+    return GhostTrace(id: id, path: path);
+  }
+  
 }

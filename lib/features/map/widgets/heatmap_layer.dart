@@ -6,22 +6,68 @@ import 'package:immersya_mobile_app/models/capture_point_model.dart';
 
 class HeatmapLayer extends StatelessWidget {
   final List<CapturePoint> points;
-  
-  const HeatmapLayer({super.key, required this.points});
+  // --- MODIFICATION : On attend un MapController ---
+  final MapController controller;
+
+  const HeatmapLayer({
+    super.key, 
+    required this.points,
+    required this.controller, // Ajout au constructeur
+  });
 
   @override
   Widget build(BuildContext context) {
-    return CircleLayer(
-      circles: points.map((point) {
-        return CircleMarker(
-          point: point.location,
-          radius: 12, // Rayon de chaque point de la heatmap
-          useRadiusInMeter: false, // Le rayon est en pixels, pas en mètres
-          color: Colors.redAccent.withOpacity(0.15), // Couleur très transparente pour l'effet de superposition
-          borderColor: Colors.transparent, // Pas de bordure pour un effet lisse
-          borderStrokeWidth: 0,
-        );
-      }).toList(),
+    // --- MODIFICATION : On utilise le contrôleur pour obtenir la caméra ---
+    final camera = controller.camera;
+    final mapSizePoint = camera.size;
+    final mapSize = Size(mapSizePoint.x, mapSizePoint.y);
+
+    return CustomPaint(
+      // On passe la caméra directement au peintre
+      painter: _HeatmapPainter(points: points, camera: camera),
+      size: mapSize,
     );
+  }
+}
+
+class _HeatmapPainter extends CustomPainter {
+  final List<CapturePoint> points;
+  // Le peintre attend maintenant directement un objet MapCamera
+  final MapCamera camera;
+
+  _HeatmapPainter({required this.points, required this.camera});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+    
+    for (final point in points) {
+      if (!camera.visibleBounds.contains(point.location)) {
+        continue;
+      }
+
+      final pointOnScreen = camera.project(point.location);
+      final offset = Offset(pointOnScreen.x, pointOnScreen.y);
+
+      final gradient = RadialGradient(
+        colors: [
+          Colors.red.withOpacity(0.3),
+          Colors.red.withOpacity(0.0),
+        ],
+        stops: const [0.0, 1.0],
+      );
+
+      paint.shader = gradient.createShader(
+        Rect.fromCircle(center: offset, radius: 35),
+      );
+      
+      canvas.drawCircle(offset, 35, paint);
+    }
+  }
+
+  // La condition de repaint est maintenant plus claire et plus fiable.
+  @override
+  bool shouldRepaint(covariant _HeatmapPainter oldDelegate) {
+    return oldDelegate.camera != camera;
   }
 }

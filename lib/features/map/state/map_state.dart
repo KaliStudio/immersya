@@ -9,6 +9,7 @@ enum MapFilter {
   missions,
   currentUser,
   heatmap,
+  ghostTraces,
 }
 
 class MapState with ChangeNotifier {
@@ -17,6 +18,7 @@ class MapState with ChangeNotifier {
     MapFilter.missions: true,
     MapFilter.currentUser: true,
     MapFilter.heatmap: false, // On la désactive par défaut pour ne pas surcharger la vue
+    MapFilter.ghostTraces: true, // On l'active par défaut pour la démo
   };
 
   // Un getter public pour que l'UI puisse vérifier si un filtre est actif.

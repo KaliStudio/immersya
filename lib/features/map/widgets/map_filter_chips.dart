@@ -53,6 +53,8 @@ class MapFilterChips extends StatelessWidget {
         return 'Ma Position';
       case MapFilter.heatmap:
         return 'Heatmap';
+      case MapFilter.ghostTraces:
+        return 'Traces';
     }
   }
 }

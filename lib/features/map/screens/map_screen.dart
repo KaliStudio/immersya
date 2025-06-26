@@ -14,6 +14,7 @@ import 'package:immersya_mobile_app/features/map/state/map_state.dart';
 import 'package:immersya_mobile_app/features/map/widgets/map_filter_chips.dart';
 import 'package:immersya_mobile_app/models/capture_point_model.dart';
 import 'package:immersya_mobile_app/features/map/widgets/heatmap_layer.dart';
+import 'package:immersya_mobile_app/models/ghost_trace_model.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -46,6 +47,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   List<Zone> _zones = [];
   List<Mission> _missions = [];
   List<CapturePoint> _capturePoints = [];
+  List<GhostTrace> _ghostTraces = [];
   bool _isLoading = true;
 
   @override
@@ -62,6 +64,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       _fetchZonesData(),
       _fetchMissionsData(),
       _fetchCapturePointsData(),
+      _fetchGhostTracesData(),
     ]);
     await _initializeLocationServices();
     if(mounted) setState(() => _isLoading = false);
@@ -94,6 +97,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       if (mounted) setState(() => _missions = loadedMissions);
     } catch (e) {
       debugPrint("Erreur de chargement des missions: $e");
+    }
+  }
+
+Future<void> _fetchGhostTracesData() async {
+    try {
+      final apiService = context.read<MockApiService>();
+      final loadedTraces = await apiService.fetchGhostTraces();
+      if (mounted) {
+        setState(() => _ghostTraces = loadedTraces);
+      }
+    } catch (e) {
+      debugPrint("Erreur de chargement des traces GPS: $e");
     }
   }
 
@@ -176,6 +191,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 subdomains: const ['a', 'b', 'c', 'd'],
                 retinaMode: true,
               ),
+              // On la met en premier pour qu'elle soit en dessous des polygones.
+              if (mapState.isFilterActive(MapFilter.ghostTraces))
+                PolylineLayer(
+                  polylines: _ghostTraces.map((trace) {
+                    return Polyline(
+                      points: trace.path,
+                      color: Colors.blueAccent.withOpacity(0.4), // Couleur "fantôme"
+                      strokeWidth: 3.0,
+                    );
+                  }).toList(),
+                ),
               // --- MODIFICATION : Affichage conditionnel de la couche des zones ---
               if (mapState.isFilterActive(MapFilter.zones))
                 PolygonLayer(
@@ -188,7 +214,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   )).toList(),
                 ),
               if (mapState.isFilterActive(MapFilter.heatmap))
-                HeatmapLayer(points: _capturePoints),
+                HeatmapLayer(points: _capturePoints, controller: _mapController),
               // --- MODIFICATION : Affichage conditionnel de la couche des missions ---
               if (mapState.isFilterActive(MapFilter.missions))
                 MarkerLayer(
