@@ -98,7 +98,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
               alignment: Alignment.bottomLeft,
               children: [
                 Image.network(
-                  contribution.thumbnailUrl ?? 'https://via.placeholder.com/150/CCCCCC/FFFFFF?Text=No+Image',
+                  contribution.thumbnailUrl ?? 'https://placehold.co/600x400/000000/FFFFFF/png',
                   height: 150,
                   width: double.infinity,
                   fit: BoxFit.cover,

@@ -50,7 +50,7 @@ class ContributionDetailScreen extends StatelessWidget {
           ),
         ),
         background: Image.network(
-          contribution.thumbnailUrl ?? 'https://via.placeholder.com/400x250/CCCCCC/FFFFFF?Text=No+Image',
+          contribution.thumbnailUrl ?? 'https://placehold.co/600x400',
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
             return const Center(child: Icon(Icons.image_not_supported, color: Colors.grey));

@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:immersya_mobile_app/api/mock_api_service.dart';
 import 'package:immersya_mobile_app/app.dart';
 import 'package:immersya_mobile_app/features/capture/capture_state.dart';
-import 'package:immersya_mobile_app/features/map/state/map_state.dart'; // --- AJOUT DE L'IMPORT
-
+import 'package:immersya_mobile_app/features/map/state/map_state.dart';
+import 'package:immersya_mobile_app/features/auth/services/auth_service.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -22,10 +22,11 @@ void main() {
         ChangeNotifierProvider<CaptureState>(
           create: (_) => CaptureState(),
         ),
-        // --- AJOUT DU NOUVEAU PROVIDER POUR LA CARTE ---
         ChangeNotifierProvider<MapState>(
           create: (_) => MapState(),
         ),
+        ChangeNotifierProvider<AuthService>(
+          create: (_) => AuthService()),
       ],
       child: const ImmersyaPathfinderApp(),
     ),
