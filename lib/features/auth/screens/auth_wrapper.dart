@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:immersya_mobile_app/features/auth/services/auth_service.dart';
 import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart';
 import 'package:provider/provider.dart';
-// NOTE: Nous allons créer cet écran juste après.
-// import 'login_screen.dart'; 
+import 'login_screen.dart'; 
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
@@ -19,9 +18,7 @@ class AuthWrapper extends StatelessWidget {
       return const MainShell();
     } else {
       // Sinon, on affiche l'écran de connexion.
-      // return const LoginScreen(); // On décommentera ça bientôt
-      // En attendant, on met un placeholder :
-      return const Scaffold(body: Center(child: Text("Page de Login à venir")));
+     return const LoginScreen();
     }
   }
 }

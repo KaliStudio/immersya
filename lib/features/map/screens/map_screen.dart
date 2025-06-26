@@ -157,7 +157,7 @@ Future<void> _fetchGhostTracesData() async {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Immersya Pathfinder'),
+        title: const Text('Immersya'),
         centerTitle: true,
         actions: [
           if (!_isLoading)
