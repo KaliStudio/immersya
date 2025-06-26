@@ -1,7 +1,9 @@
 // lib/features/profile/screens/settings_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // --- AJOUT : Pour accéder à AuthService ---
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:immersya_mobile_app/features/auth/services/auth_service.dart'; // --- AJOUT : Pour importer AuthService ---
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -11,10 +13,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // On utilise un Future pour gérer l'état de chargement initial
   late Future<void> _loadingFuture;
-
-  // Valeurs par défaut
   bool _enableLiDAR = true;
   bool _enableNotifications = true;
   double _photoQuality = 0.8;
@@ -22,22 +21,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    // On assigne le Future dans initState
     _loadingFuture = _loadSettings();
   }
 
-  // Fonction pour charger les préférences depuis le disque
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    // Utiliser setState pour mettre à jour l'UI une fois les données chargées
-    setState(() {
-      _enableLiDAR = prefs.getBool('settings_enableLiDAR') ?? true;
-      _enableNotifications = prefs.getBool('settings_enableNotifications') ?? true;
-      _photoQuality = prefs.getDouble('settings_photoQuality') ?? 0.8;
-    });
+    if (mounted) {
+      setState(() {
+        _enableLiDAR = prefs.getBool('settings_enableLiDAR') ?? true;
+        _enableNotifications = prefs.getBool('settings_enableNotifications') ?? true;
+        _photoQuality = prefs.getDouble('settings_photoQuality') ?? 0.8;
+      });
+    }
   }
 
-  // Fonction générique pour sauvegarder les changements
   Future<void> _saveSetting<T>(String key, T value) async {
     final prefs = await SharedPreferences.getInstance();
     if (value is bool) {
@@ -45,7 +42,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } else if (value is double) {
       await prefs.setDouble(key, value);
     }
-    // On pourrait ajouter d'autres types si besoin (String, int...)
   }
 
   @override
@@ -54,15 +50,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         title: const Text('Paramètres'),
       ),
-      // On utilise un FutureBuilder pour afficher un loader pendant le chargement
       body: FutureBuilder(
         future: _loadingFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          
-          // Une fois le chargement terminé, on affiche la liste des paramètres
           return _buildSettingsList();
         },
       ),
@@ -129,7 +122,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // Helper pour les titres de section
   Padding _buildSectionTitle(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
@@ -143,7 +135,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
   
-  // Helper pour la boîte de dialogue de déconnexion
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -155,15 +146,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             TextButton(
               child: const Text('Annuler'),
               onPressed: () {
-                Navigator.of(dialogContext).pop(); // Ferme la dialogue
+                Navigator.of(dialogContext).pop();
               },
             ),
             TextButton(
               child: const Text('Confirmer', style: TextStyle(color: Colors.red)),
+              // --- MODIFICATION : On connecte le bouton à AuthService ---
               onPressed: () {
-                // Ici, on mettrait la vraie logique de déconnexion
-                print("Déconnexion de l'utilisateur...");
-                Navigator.of(dialogContext).pop(); // Ferme la dialogue
+                // 1. On ferme la boîte de dialogue
+                Navigator.of(dialogContext).pop();
+                
+                // 2. On accède à AuthService via le contexte principal (celui du Scaffold)
+                //    et on appelle la méthode de déconnexion.
+                //    On utilise `context.read` car on est dans un callback.
+                context.read<AuthService>().logout();
+
+                // 3. (Optionnel) Si l'écran des paramètres n'est pas la racine de la navigation
+                //    après la déconnexion, on peut le fermer aussi pour éviter qu'un utilisateur
+                //    puisse revenir dessus avec le bouton "retour".
+                if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                }
               },
             ),
           ],

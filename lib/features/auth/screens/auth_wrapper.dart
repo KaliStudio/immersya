@@ -13,12 +13,10 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = context.watch<AuthService>();
 
-    if (authService.isAuthenticated) {
-      // Si l'utilisateur est connecté, on affiche l'application principale.
-      return const MainShell();
+if (authService.isAuthenticated) {
+      return MainShell(key: mainShellNavigatorKey);
     } else {
-      // Sinon, on affiche l'écran de connexion.
-     return const LoginScreen();
+      return LoginScreen();
     }
   }
 }

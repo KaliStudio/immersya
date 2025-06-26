@@ -16,6 +16,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  // --- AJOUT : Contrôleur pour la confirmation ---
+  final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
 
   @override
@@ -23,10 +25,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    // --- AJOUT : Ne pas oublier de le disposer ---
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
   Future<void> _register() async {
+    // La validation du formulaire inclura maintenant la vérification des mots de passe.
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
@@ -47,7 +52,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     }
     
-    // Si l'inscription réussit, l'AuthWrapper nous redirigera.
     if (mounted) setState(() => _isLoading = false);
   }
 
@@ -82,6 +86,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   decoration: const InputDecoration(labelText: 'Mot de passe', border: OutlineInputBorder()),
                   obscureText: true,
                   validator: (value) => (value == null || value.length < 6) ? 'Le mot de passe doit faire au moins 6 caractères' : null,
+                ),
+                const SizedBox(height: 16),
+                // --- AJOUT : Champ de confirmation du mot de passe ---
+                TextFormField(
+                  controller: _confirmPasswordController,
+                  decoration: const InputDecoration(labelText: 'Confirmer le mot de passe', border: OutlineInputBorder()),
+                  obscureText: true,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Veuillez confirmer votre mot de passe';
+                    }
+                    if (value != _passwordController.text) {
+                      return 'Les mots de passe ne correspondent pas';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 24),
                 _isLoading

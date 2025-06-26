@@ -1,3 +1,5 @@
+// lib/features/profile/screens/profile_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:immersya_mobile_app/api/mock_api_service.dart';
 import 'package:immersya_mobile_app/features/capture/capture_state.dart';
@@ -7,15 +9,16 @@ import 'package:immersya_mobile_app/features/auth/services/auth_service.dart';
 import 'package:immersya_mobile_app/models/user_model.dart';
 import 'package:immersya_mobile_app/features/gamification/models/badge_model.dart' as gamification_models;
 import 'package:immersya_mobile_app/features/gamification/services/gamification_service.dart';
+import 'package:latlong2/latlong.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
-
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveClientMixin  {
+  // --- VARIABLES D'ÉTAT ---
   User? _currentUser;
   UserProfile? _currentProfile;
   late GamificationService _gamificationService;
@@ -27,10 +30,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // On récupère l'utilisateur connecté depuis AuthService
+      // Initialisation des services et de l'écouteur
       final apiService = context.read<MockApiService>();
       _gamificationService = GamificationService(apiService);
-      // On initialise l'écouteur pour la mise à jour des points en temps réel
       _captureState = context.read<CaptureState>();
       _captureState.addListener(_onCaptureStateChanged);
       _currentUser = context.read<AuthService>().currentUser;
@@ -49,7 +51,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  // Cette méthode met à jour l'état local du profil quand des points sont gagnés
+  // --- LOGIQUE DE GESTION DES DONNÉES ---
+
+  // Recharge toutes les données du profil et des badges depuis l'API.
   Future<void> _loadProfileData() async {
     if (!mounted) return;
     setState(() => _isLoadingProfile = true);
@@ -71,26 +75,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // Méthode appelée chaque fois qu'une capture est terminée.
   void _onCaptureStateChanged() {
-    if (_captureState.lastGainedPoints > 0 && _currentProfile != null) {
+    final lastLocation = _captureState.lastCaptureLocation;
+    // On vérifie que toutes les conditions sont réunies pour une mise à jour.
+    if (_captureState.lastGainedPoints > 0 && _currentProfile != null && _currentUser != null && lastLocation != null) {
+      
+      // 1. Mettre à jour l'UI immédiatement pour le feedback des points (mise à jour locale)
       if (mounted) {
         setState(() {
-          _currentProfile = UserProfile(
-            username: _currentProfile!.username,
-            rank: _currentProfile!.rank,
-            areaCoveredKm2: _currentProfile!.areaCoveredKm2,
+          _currentProfile = _currentProfile!.copyWith(
             scansValidated: _currentProfile!.scansValidated + 1,
             immersyaPoints: _currentProfile!.immersyaPoints + _captureState.lastGainedPoints,
           );
         });
       }
+      
+      // 2. Lancer la logique complexe de mise à jour de la localisation en arrière-plan
+      _updateProfileLocationInBackground(lastLocation);
+    }
+  }
+
+  // Lance le processus de mise à jour de la localisation principale.
+  Future<void> _updateProfileLocationInBackground(LatLng lastCaptureLocation) async {
+    if (_currentUser == null) return;
+    
+    final userId = _currentUser!.id;
+    final apiService = context.read<MockApiService>();
+    
+    // a. Enregistrer la nouvelle capture dans l'historique
+    await apiService.logCapture(userId, lastCaptureLocation);
+
+    // b. Déterminer la nouvelle localisation principale à partir de l'historique
+    final newLocation = await _gamificationService.determinePrimaryLocation(userId);
+
+    // c. Si la localisation principale a changé, on met à jour le profil dans l'API
+    if (newLocation.isNotEmpty) {
+      final newCity = newLocation['city'];
+      if (newCity != null && newCity != _currentProfile?.city) {
+         print("Changement de localisation détecté ! Mise à jour du profil.");
+         await apiService.updateMockUserLocation(
+            userId,
+            country: newLocation['country'],
+            region: newLocation['region'],
+            city: newCity,
+         );
+        // d. Recharger toutes les données pour que l'UI soit parfaitement synchronisée
+        if (mounted) _loadProfileData();
+      }
     }
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
-    if (_currentUser == null) {
-      return const Scaffold(body: Center(child: Text("Utilisateur non connecté.")));
+    if (_isLoadingProfile) {
+      return Scaffold(appBar: AppBar(title: const Text('Mon Profil')), body: const Center(child: CircularProgressIndicator()));
+    }
+    if (_currentProfile == null) {
+      return Scaffold(appBar: AppBar(title: const Text('Mon Profil')), body: const Center(child: Text("Connectez-vous pour voir votre profil.")));
     }
     
     return Scaffold(
@@ -98,20 +143,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Mon Profil'),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
-            },
-          ),
+          IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
+          }),
         ],
       ),
-      body: _isLoadingProfile
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadProfileData,
-              child: _buildProfileView(_currentProfile!),
-            ),
+      body: RefreshIndicator(
+        onRefresh: _loadProfileData,
+        child: _buildProfileView(_currentProfile!),
+      ),
     );
   }
 
@@ -120,6 +160,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
+        // Header du profil
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(color: theme.colorScheme.surface, borderRadius: BorderRadius.circular(16)),
@@ -134,6 +175,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 24),
+
+        // Section des statistiques
         Text('Statistiques', style: theme.textTheme.titleLarge),
         const SizedBox(height: 16),
         _buildStatCard(icon: Icons.star_border, label: 'Immersya Points', value: profile.immersyaPoints.toString(), color: Colors.amber),
@@ -142,10 +185,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 12),
         _buildStatCard(icon: Icons.check_circle_outline, label: 'Scans Validés', value: profile.scansValidated.toString(), color: Colors.blue),
         const SizedBox(height: 24),
+        
+        // Section des badges
         Text('Badges Débloqués (${_unlockedBadges.length})', style: theme.textTheme.titleLarge),
         const SizedBox(height: 16),
         _buildBadgesSection(),
         const SizedBox(height: 32),
+
+        // Bouton de déconnexion
         ElevatedButton.icon(
           onPressed: () => context.read<AuthService>().logout(),
           icon: const Icon(Icons.logout),
@@ -179,14 +226,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         color: Theme.of(context).colorScheme.surface,
         child: const Padding(
           padding: EdgeInsets.all(24.0),
-          child: Text("Continuez à explorer pour débloquer votre premier badge !", textAlign: TextAlign.center, style: TextStyle(fontStyle: FontStyle.italic)),
+          child: Text(
+            "Continuez à explorer pour débloquer votre premier badge !",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontStyle: FontStyle.italic),
+          ),
         ),
       );
     }
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, crossAxisSpacing: 12, mainAxisSpacing: 12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
       itemCount: _unlockedBadges.length,
       itemBuilder: (context, index) {
         final badge = _unlockedBadges[index];
@@ -218,21 +273,22 @@ class _BadgeWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Ink(
           padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(badge.icon, color: badge.color, size: 32),
               const SizedBox(height: 4),
-              //Text(badge.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
-            Expanded(
+              Expanded(
                 child: FittedBox(
+                  fit: BoxFit.scaleDown,
                   child: Text(
                     badge.name,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), // Police légèrement plus petite
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),

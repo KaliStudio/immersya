@@ -23,8 +23,6 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-// NOTE: Cet algo simple fonctionne pour les polygones convexes. Pour plus de robustesse, 
-// un package comme 'polygon' est recommandé car il gère les cas complexes.
 bool isPointInPolygon(LatLng point, List<LatLng> polygon) {
   int intersectCount = 0;
   for (int j = 0; j < polygon.length - 1; j++) {
@@ -100,7 +98,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
-Future<void> _fetchGhostTracesData() async {
+  Future<void> _fetchGhostTracesData() async {
     try {
       final apiService = context.read<MockApiService>();
       final loadedTraces = await apiService.fetchGhostTraces();
@@ -128,6 +126,7 @@ Future<void> _fetchGhostTracesData() async {
       if(mounted) {
         final newPosition = LatLng(position.latitude, position.longitude);
         if(_currentUserPosition == null) {
+            // Premier centrage automatique
             _mapController.move(newPosition, 17.0);
         }
         setState(() => _currentUserPosition = newPosition);
@@ -138,6 +137,7 @@ Future<void> _fetchGhostTracesData() async {
   @override
   void dispose() {
     _positionStreamSubscription?.cancel();
+    _mapController.dispose(); // Bonne pratique de disposer le contrôleur
     super.dispose();
   }
 
@@ -151,13 +151,25 @@ Future<void> _fetchGhostTracesData() async {
     }
   }
 
+  // --- NOUVELLE FONCTION POUR LE BOUTON ---
+  void _centerOnUser() {
+    if (_currentUserPosition != null) {
+      // Utilise la méthode `move` du contrôleur pour animer la carte
+      _mapController.move(_currentUserPosition!, 17.0);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Recherche de la position en cours...')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final mapState = context.watch<MapState>();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Immersya'),
+        title: const Text('Immersya Pathfinder'), // Titre corrigé
         centerTitle: true,
         actions: [
           if (!_isLoading)
@@ -165,6 +177,12 @@ Future<void> _fetchGhostTracesData() async {
           if (_isLoading)
             const Padding(padding: EdgeInsets.only(right: 16.0), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
         ],
+      ),
+      // --- AJOUT DU BOUTON FLOTTANT ---
+      floatingActionButton: FloatingActionButton(
+        onPressed: _centerOnUser,
+        tooltip: 'Centrer sur ma position',
+        child: const Icon(Icons.my_location),
       ),
       body: Stack(
         children: [
@@ -190,56 +208,29 @@ Future<void> _fetchGhostTracesData() async {
                 urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
                 subdomains: const ['a', 'b', 'c', 'd'],
                 retinaMode: true,
+                // --- CORRECTION CRITIQUE POUR ÉVITER LE FOND GRIS ---
+                userAgentPackageName: 'com.example.immersya_mobile_app', // Assurez-vous que cela correspond à votre packageId
               ),
-              // On la met en premier pour qu'elle soit en dessous des polygones.
               if (mapState.isFilterActive(MapFilter.ghostTraces))
                 PolylineLayer(
-                  polylines: _ghostTraces.map((trace) {
-                    return Polyline(
-                      points: trace.path,
-                      color: Colors.blueAccent.withOpacity(0.4), // Couleur "fantôme"
-                      strokeWidth: 3.0,
-                    );
-                  }).toList(),
+                  polylines: _ghostTraces.map((trace) => Polyline(points: trace.path, color: Colors.blueAccent.withOpacity(0.4), strokeWidth: 3.0)).toList(),
                 ),
-              // --- MODIFICATION : Affichage conditionnel de la couche des zones ---
               if (mapState.isFilterActive(MapFilter.zones))
                 PolygonLayer(
-                  polygons: _zones.map((zone) => Polygon(
-                    points: zone.polygon,
-                    color: _getColorForStatus(zone.coverageStatus),
-                    borderColor: _getColorForStatus(zone.coverageStatus).withOpacity(0.8),
-                    borderStrokeWidth: 1.5,
-                    isFilled: true,
-                  )).toList(),
+                  polygons: _zones.map((zone) => Polygon(points: zone.polygon, color: _getColorForStatus(zone.coverageStatus), borderColor: _getColorForStatus(zone.coverageStatus).withOpacity(0.8), borderStrokeWidth: 1.5, isFilled: true)).toList(),
                 ),
               if (mapState.isFilterActive(MapFilter.heatmap))
                 HeatmapLayer(points: _capturePoints, controller: _mapController),
-              // --- MODIFICATION : Affichage conditionnel de la couche des missions ---
               if (mapState.isFilterActive(MapFilter.missions))
                 MarkerLayer(
-                  markers: _missions.map((mission) => Marker(
-                    width: 120,
-                    height: 80,
-                    point: mission.location,
-                    child: MissionMarker(mission: mission),
-                  )).toList(),
+                  markers: _missions.map((mission) => Marker(width: 120, height: 80, point: mission.location, child: MissionMarker(mission: mission))).toList(),
                 ),
-              // --- MODIFICATION : Affichage conditionnel du joueur ---
               if (_currentUserPosition != null && mapState.isFilterActive(MapFilter.currentUser))
                 MarkerLayer(
-                  markers: [
-                    Marker(
-                      width: 80.0,
-                      height: 80.0,
-                      point: _currentUserPosition!,
-                      child: const PlayerMarker(),
-                    ),
-                  ],
+                  markers: [Marker(width: 80.0, height: 80.0, point: _currentUserPosition!, child: const PlayerMarker())],
                 ),
             ],
           ),
-          // --- AJOUT : Le widget des filtres superposé à la carte ---
           const MapFilterChips(),
         ],
       ),
@@ -247,8 +238,6 @@ Future<void> _fetchGhostTracesData() async {
   }
 }
 
-// --- Les widgets MissionMarker et PlayerMarker restent INCHANGÉS ---
-// (Le code de ces widgets est identique à celui que vous avez fourni)
 class MissionMarker extends StatelessWidget {
   final Mission mission;
   const MissionMarker({super.key, required this.mission});

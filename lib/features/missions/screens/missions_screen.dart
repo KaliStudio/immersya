@@ -12,7 +12,7 @@ class MissionsScreen extends StatefulWidget {
   State<MissionsScreen> createState() => _MissionsScreenState();
 }
 
-class _MissionsScreenState extends State<MissionsScreen> {
+class _MissionsScreenState extends State<MissionsScreen> with AutomaticKeepAliveClientMixin {
   Future<List<Mission>>? _missionsFuture;
 
   @override
@@ -25,6 +25,9 @@ class _MissionsScreenState extends State<MissionsScreen> {
     final apiService = context.read<MockApiService>();
     _missionsFuture = apiService.fetchMissions();
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {

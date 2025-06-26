@@ -1,6 +1,10 @@
 // lib/features/capture/screens/capture_screen.dart
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+// --- AJOUTS : Imports nécessaires pour la localisation ---
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
+// ---
 import 'package:immersya_mobile_app/features/capture/capture_state.dart';
 import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -13,7 +17,7 @@ class CaptureScreen extends StatefulWidget {
   State<CaptureScreen> createState() => _CaptureScreenState();
 }
 
-class _CaptureScreenState extends State<CaptureScreen> {
+class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveClientMixin {
   CameraController? _cameraController;
   Future<void>? _initializeControllerFuture;
   int _photoCount = 0;
@@ -25,12 +29,17 @@ class _CaptureScreenState extends State<CaptureScreen> {
   }
 
   Future<void> _initializeCamera() async {
-    // ... (le code d'initialisation de la caméra ne change pas)
     final cameraStatus = await Permission.camera.request();
     if (cameraStatus.isGranted) {
       final cameras = await availableCameras();
+      if (cameras.isEmpty) throw Exception("Aucune caméra disponible.");
+      
       final firstCamera = cameras.first;
-      _cameraController = CameraController(firstCamera, ResolutionPreset.high);
+      _cameraController = CameraController(
+        firstCamera, 
+        ResolutionPreset.high, 
+        enableAudio: false, // Désactiver l'audio est une bonne pratique si non utilisé
+      );
       return _cameraController!.initialize();
     } else {
       throw Exception("Permissions caméra refusées.");
@@ -44,23 +53,23 @@ class _CaptureScreenState extends State<CaptureScreen> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
-    // Le Consumer écoute maintenant CaptureState
     return Consumer<CaptureState>(
       builder: (context, captureState, child) {
-        // Si on est en train d'uploader, on affiche la progression (prioritaire)
         if (captureState.isUploading) {
           return _buildUploadProgressView(captureState);
         }
         
-        // On utilise un switch pour gérer les différents modes de capture
         switch (captureState.mode) {
           case CaptureMode.mission:
           case CaptureMode.freeScan:
             return _buildCameraView(captureState);
           case CaptureMode.idle:
           default:
-            return _buildIdleSelectionView(); // La nouvelle vue de sélection
+            return _buildIdleSelectionView();
         }
       },
     );
@@ -109,7 +118,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
                   textStyle: const TextStyle(fontSize: 16),
                 ),
                 onPressed: () {
-                   mainShellNavigatorKey.currentState?.goToTab(2); // L'index des missions est 2
+                   // Navigue vers l'onglet des classements (index 2 dans notre nouvelle config)
+                   mainShellNavigatorKey.currentState?.goToTab(2); 
                 },
               ),
             ],
@@ -135,13 +145,16 @@ class _CaptureScreenState extends State<CaptureScreen> {
     );
   }
 
-  // Vue de la caméra (légèrement modifiée pour être plus générique)
+  // Vue de la caméra
   Widget _buildCameraView(CaptureState captureState) {
     return Scaffold(
       body: FutureBuilder<void>(
         future: _initializeControllerFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done) {
+            if (snapshot.hasError) {
+              return Center(child: Text("Erreur d'initialisation de la caméra: ${snapshot.error}"));
+            }
             return Stack(fit: StackFit.expand, children: [
               CameraPreview(_cameraController!),
               _buildHud(captureState),
@@ -154,7 +167,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
     );
   }
   
-  // Vue de l'upload (légèrement modifiée)
+  // Vue de l'upload
   Widget _buildUploadProgressView(CaptureState captureState) {
     String title = captureState.mode == CaptureMode.mission
       ? 'Mission: "${captureState.activeMission!.title}"'
@@ -181,18 +194,13 @@ class _CaptureScreenState extends State<CaptureScreen> {
     );
   }
   
-  // HUD (modifié pour être plus générique)
+  // HUD (Heads-Up Display)
   Widget _buildHud(CaptureState captureState) {
-    String title = captureState.mode == CaptureMode.mission
-      ? 'Mission: ${captureState.activeMission!.title}'
-      : 'Scan Libre: ${captureState.freeScanType.name}';
-      
     return Padding(
       padding: const EdgeInsets.all(20.0).copyWith(top: 40),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Bouton pour annuler
           Align(
             alignment: Alignment.topLeft,
             child: TextButton.icon(
@@ -216,18 +224,40 @@ class _CaptureScreenState extends State<CaptureScreen> {
                     final captureState = context.read<CaptureState>();
                     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-                    // On lance l'upload et on attend le message de retour
-                    final String successMessage = await captureState.completeAndUploadScan(_photoCount);
+                    // 1. Récupérer la position GPS actuelle
+                    Position? currentPosition;
+                    try {
+                      currentPosition = await Geolocator.getCurrentPosition(
+                        desiredAccuracy: LocationAccuracy.high
+                      );
+                    } catch (e) {
+                      print("Erreur de récupération de la position GPS: $e");
+                      scaffoldMessenger.showSnackBar(
+                        const SnackBar(
+                          content: Text("Erreur: Impossible d'obtenir la position GPS."),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return; // Arrêter le processus
+                    }
+
+                    // 2. Appeler la nouvelle méthode `completeCapture` avec la localisation
+                    if (mounted && currentPosition != null) {
+                       await captureState.completeCapture(
+                        photoCount: _photoCount,
+                        location: LatLng(currentPosition.latitude, currentPosition.longitude),
+                      );
+                    }
                     
-                    // On réinitialise le compteur de photos
+                    // 3. Réinitialiser le compteur de photos local
                     if (mounted) {
                       setState(() { _photoCount = 0; });
                     }
 
-                    // On affiche le message de succès
+                    // 4. Afficher un message de succès générique
                     scaffoldMessenger.showSnackBar(
                       SnackBar(
-                        content: Text(successMessage),
+                        content: const Text("Scan uploadé avec succès !"),
                         backgroundColor: Colors.green[700],
                       ),
                     );
@@ -237,8 +267,13 @@ class _CaptureScreenState extends State<CaptureScreen> {
                 ),
               GestureDetector(
                 onTap: () async {
-                  await _cameraController!.takePicture();
-                  setState(() { _photoCount++; });
+                  if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+                  try {
+                    await _cameraController!.takePicture();
+                    if(mounted) setState(() { _photoCount++; });
+                  } catch (e) {
+                    print("Erreur lors de la prise de photo: $e");
+                  }
                 },
                 child: Container(width: 70, height: 70, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.3), border: Border.all(color: Colors.white, width: 4))),
               ),

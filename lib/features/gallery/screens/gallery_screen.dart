@@ -12,7 +12,7 @@ class GalleryScreen extends StatefulWidget {
   State<GalleryScreen> createState() => _GalleryScreenState();
 }
 
-class _GalleryScreenState extends State<GalleryScreen> {
+class _GalleryScreenState extends State<GalleryScreen> with AutomaticKeepAliveClientMixin {
   Future<List<Contribution>>? _contributionsFuture;
 
   @override
@@ -32,6 +32,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
       });
     }
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
