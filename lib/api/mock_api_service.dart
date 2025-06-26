@@ -4,6 +4,8 @@ import 'package:immersya_mobile_app/models/zone_model.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:immersya_mobile_app/models/capture_point_model.dart';
 import 'package:immersya_mobile_app/models/ghost_trace_model.dart';
+import 'package:flutter/material.dart';
+import 'package:immersya_mobile_app/features/gamification/models/badge_model.dart' as gamification_models;
 
 // ===================================================================
 // DÉFINITION DES MODÈLES DE DONNÉES (INCHANGÉ)
@@ -106,6 +108,54 @@ class MockApiService {
     ),
     // On pourrait ajouter d'autres profils pour d'autres utilisateurs ici.
   };
+
+   Future<List<gamification_models.Badge>> fetchAllBadges() async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    
+    // --- MODIFICATION : On utilise l'alias pour instancier nos badges ---
+    return [
+      gamification_models.Badge(
+        id: 'badge_001',
+        name: 'Premiers Pas',
+        description: 'Valider votre premier scan.',
+        icon: Icons.adjust,
+        color: Colors.green,
+        unlockCondition: (profile) => profile.scansValidated >= 1,
+      ),
+      gamification_models.Badge(
+        id: 'badge_002',
+        name: 'Collectionneur',
+        description: 'Atteindre 10,000 Immersya Points.',
+        icon: Icons.star,
+        color: Colors.amber,
+        unlockCondition: (profile) => profile.immersyaPoints >= 10000,
+      ),
+      gamification_models.Badge(
+        id: 'badge_003',
+        name: 'Topographe',
+        description: 'Couvrir plus de 2 km².',
+        icon: Icons.public,
+        color: Colors.blue,
+        unlockCondition: (profile) => profile.areaCoveredKm2 >= 2.0,
+      ),
+      gamification_models.Badge(
+        id: 'badge_004',
+        name: 'Contributeur Vétéran',
+        description: 'Valider 50 scans.',
+        icon: Icons.military_tech,
+        color: Colors.purple,
+        unlockCondition: (profile) => profile.scansValidated >= 50,
+      ),
+      gamification_models.Badge(
+        id: 'badge_005',
+        name: 'Millionnaire',
+        description: 'Devenir une légende avec 1,000,000 de points.',
+        icon: Icons.diamond,
+        color: Colors.cyanAccent,
+        unlockCondition: (profile) => profile.immersyaPoints >= 1000000,
+      ),
+    ];
+  }
 
   // --- MODIFICATION : La méthode `fetchUserProfile` prend maintenant un `userId` ---
   Future<UserProfile> fetchUserProfile({required String userId}) async {
