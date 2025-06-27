@@ -9,10 +9,10 @@ class AppTheme {
       backgroundColor: Color(0xFF1B263B),
       elevation: 0,
     ),
-    bottomNavigationBarTheme: BottomNavigationBarThemeData(
-      backgroundColor: const Color(0xFF1B263B),
-      selectedItemColor: const Color(0xFFE0E1DD),
-      unselectedItemColor: const Color(0xFF778DA9),
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      backgroundColor: Color(0xFF1B263B),
+      selectedItemColor: Color(0xFFE0E1DD),
+      unselectedItemColor: Color(0xFF778DA9),
       type: BottomNavigationBarType.fixed,
     ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(

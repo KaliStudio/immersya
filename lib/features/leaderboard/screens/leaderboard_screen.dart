@@ -51,7 +51,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
   void _onVisibilityChanged(VisibilityInfo info) {
     // On ne recharge que si l'écran est entièrement visible et si un certain temps s'est écoulé.
     if (info.visibleFraction == 1.0 && DateTime.now().difference(_lastLoadTime).inSeconds > 30) {
-      print("Leaderboard est visible, rafraîchissement des onglets GPS...");
+      //print("Leaderboard est visible, rafraîchissement des onglets GPS...");
       _lastLoadTime = DateTime.now();
       _loadAndBuildTabsFromGPS();
     }
@@ -72,10 +72,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
         List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
         if (placemarks.isNotEmpty) {
           placemark = placemarks.first;
-          print("📍 Localisation GPS pour les classements : ${placemark.locality}, ${placemark.country}");
+          //print("📍 Localisation GPS pour les classements : ${placemark.locality}, ${placemark.country}");
         }
       } catch (e) {
-        print("Erreur de géocodage pour le classement: $e");
+        //print("Erreur de géocodage pour le classement: $e");
       }
     }
     
@@ -134,6 +134,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return VisibilityDetector(
       key: const Key('leaderboard-visibility-detector'),
       onVisibilityChanged: _onVisibilityChanged,
@@ -259,7 +260,7 @@ class __LeaderboardListViewState extends State<_LeaderboardListView> with Automa
 class _LeaderboardTile extends StatelessWidget {
   final UserProfile profile;
   final int rank;
-  const _LeaderboardTile({super.key, required this.profile, required this.rank});
+  const _LeaderboardTile({required this.profile, required this.rank});
 
   @override
   Widget build(BuildContext context) {
@@ -267,7 +268,7 @@ class _LeaderboardTile extends StatelessWidget {
     final isTop3 = rank <= 3;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      color: isTop3 ? Colors.amber.withOpacity(0.1) : theme.colorScheme.surface,
+      color: isTop3 ? Colors.amber.withAlpha(26) : theme.colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: isTop3 ? BorderSide(color: Colors.amber[600]!, width: 1.5) : BorderSide.none,
@@ -296,7 +297,7 @@ class _LeaderboardTile extends StatelessWidget {
     if (rank == 3) { icon = Icons.emoji_events; color = Colors.brown[400]; }
     return CircleAvatar(
       radius: 22,
-      backgroundColor: theme.colorScheme.surfaceVariant,
+      backgroundColor: theme.colorScheme.surfaceContainerHighest,
       child: icon != null ? Icon(icon, color: color) : Text(rank.toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
     );
   }

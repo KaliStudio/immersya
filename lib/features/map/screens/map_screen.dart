@@ -142,12 +142,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Color _getColorForStatus(CoverageStatus status) {
-    switch (status) {
-      case CoverageStatus.modele: return Colors.green.withOpacity(0.5);
-      case CoverageStatus.partiel: return Colors.yellow.withOpacity(0.5);
-      case CoverageStatus.en_cours: return Colors.orange.withOpacity(0.5);
-      case CoverageStatus.non_couvert: return Colors.red.withOpacity(0.5);
-      default: return Colors.grey.withOpacity(0.5);
+      switch (status) {
+    case CoverageStatus.modele:
+      return Colors.green.withAlpha(128);
+    case CoverageStatus.partiel:
+      return Colors.yellow.withAlpha(128);
+    case CoverageStatus.enCours:
+      return Colors.orange.withAlpha(128);
+    case CoverageStatus.nonCouvert:
+      return Colors.red.withAlpha(128);
+    //default:
+      //return Colors.grey.withAlpha(128);
     }
   }
 
@@ -213,11 +218,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
               if (mapState.isFilterActive(MapFilter.ghostTraces))
                 PolylineLayer(
-                  polylines: _ghostTraces.map((trace) => Polyline(points: trace.path, color: Colors.blueAccent.withOpacity(0.4), strokeWidth: 3.0)).toList(),
+                  polylines: _ghostTraces.map((trace) => Polyline(points: trace.path, color: Colors.blueAccent.withAlpha(102), strokeWidth: 3.0)).toList(),
                 ),
               if (mapState.isFilterActive(MapFilter.zones))
                 PolygonLayer(
-                  polygons: _zones.map((zone) => Polygon(points: zone.polygon, color: _getColorForStatus(zone.coverageStatus), borderColor: _getColorForStatus(zone.coverageStatus).withOpacity(0.8), borderStrokeWidth: 1.5, isFilled: true)).toList(),
+                  polygons: _zones.map((zone) {
+                  final baseColor = _getColorForStatus(zone.coverageStatus);
+                  return Polygon(
+                    points: zone.polygon,
+                    color: baseColor,
+                    borderColor: baseColor.withAlpha(204),
+                    borderStrokeWidth: 1.5,
+                    isFilled: true,
+                  );
+                }).toList(),
                 ),
               if (mapState.isFilterActive(MapFilter.heatmap))
                 HeatmapLayer(points: _capturePoints, controller: _mapController),
@@ -261,7 +275,7 @@ class MissionMarker extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.7),
+              color: Colors.black.withAlpha(179),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white, width: 1),
             ),
@@ -345,7 +359,8 @@ class _PlayerMarkerState extends State<PlayerMarker> with SingleTickerProviderSt
               height: 24 * (1 + _animationController.value),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.blue.withOpacity(0.5 * (1 - _animationController.value)),
+               // color: Colors.blue.withOpacity(0.5 * (1 - _animationController.value)),
+                color: Colors.blue.withAlpha((255 * 0.5 * (1 - _animationController.value)).round()),
               ),
             ),
             Container(

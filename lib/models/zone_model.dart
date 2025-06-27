@@ -3,8 +3,8 @@ import 'package:latlong2/latlong.dart';
 
 // Enum pour un code propre et sûr
 enum CoverageStatus {
-  non_couvert,
-  en_cours,
+  nonCouvert,
+  enCours,
   partiel,
   modele,
 }

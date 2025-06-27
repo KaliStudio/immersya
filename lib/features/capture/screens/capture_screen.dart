@@ -57,20 +57,19 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Consumer<CaptureState>(
       builder: (context, captureState, child) {
         if (captureState.isUploading) {
           return _buildUploadProgressView(captureState);
-        }
-        
+        } 
         switch (captureState.mode) {
           case CaptureMode.mission:
           case CaptureMode.freeScan:
             return _buildCameraView(captureState);
           case CaptureMode.idle:
-          default:
             return _buildIdleSelectionView();
-        }
+        } 
       },
     );
   }
@@ -210,7 +209,10 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
                 context.read<CaptureState>().cancelCapture();
                 setState(() { _photoCount = 0; });
               },
-              style: TextButton.styleFrom(foregroundColor: Colors.white, backgroundColor: Colors.black.withOpacity(0.5)),
+             style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: Colors.black.withAlpha(128),
+            ),
             ),
           ),
           
@@ -231,7 +233,7 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
                         desiredAccuracy: LocationAccuracy.high
                       );
                     } catch (e) {
-                      print("Erreur de récupération de la position GPS: $e");
+                      //print("Erreur de récupération de la position GPS: $e");
                       scaffoldMessenger.showSnackBar(
                         const SnackBar(
                           content: Text("Erreur: Impossible d'obtenir la position GPS."),
@@ -242,6 +244,7 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
                     }
 
                     // 2. Appeler la nouvelle méthode `completeCapture` avec la localisation
+                    // ignore: unnecessary_null_comparison
                     if (mounted && currentPosition != null) {
                        await captureState.completeCapture(
                         photoCount: _photoCount,
@@ -262,8 +265,8 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
                       ),
                     );
                   },
-                  child: const Text('Terminer & Uploader'),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  child: const Text('Terminer & Uploader'),
                 ),
               GestureDetector(
                 onTap: () async {
@@ -272,10 +275,18 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
                     await _cameraController!.takePicture();
                     if(mounted) setState(() { _photoCount++; });
                   } catch (e) {
-                    print("Erreur lors de la prise de photo: $e");
+                    //print("Erreur lors de la prise de photo: $e");
                   }
                 },
-                child: Container(width: 70, height: 70, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.3), border: Border.all(color: Colors.white, width: 4))),
+                child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(77),
+                  border: Border.all(color: Colors.white, width: 4),
+                ),
+              ),
               ),
               Text('$_photoCount', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 5)])),
             ],

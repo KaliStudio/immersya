@@ -122,7 +122,7 @@ class MockApiService {
   Future<void> logCapture(String userId, LatLng location) async {
     await Future.delayed(const Duration(milliseconds: 100));
     _captureHistory.add(CaptureRecord(userId: userId, location: location, timestamp: DateTime.now()));
-    print("API: Capture enregistrée pour l'utilisateur $userId");
+    //print("API: Capture enregistrée pour l'utilisateur $userId");
   }
 
   Future<List<CaptureRecord>> fetchCaptureHistory(String userId) async {
@@ -133,7 +133,7 @@ class MockApiService {
   Future<void> updateMockUserLocation(String userId, {String? country, String? region, String? city}) async {
     if (_userProfiles.containsKey(userId)) {
       _userProfiles[userId] = _userProfiles[userId]!.copyWith(country: country, region: region, city: city);
-      print("API: Profil $userId mis à jour -> Pays: $country, Région: $region, Ville: $city");
+      //print("API: Profil $userId mis à jour -> Pays: $country, Région: $region, Ville: $city");
     }
   }
 
@@ -177,7 +177,7 @@ class MockApiService {
 
   Future<List<Zone>> fetchZones() async {
     await Future.delayed(const Duration(milliseconds: 500));
-    final statuses = [CoverageStatus.modele, CoverageStatus.partiel, CoverageStatus.en_cours, CoverageStatus.non_couvert];
+    final statuses = [CoverageStatus.modele, CoverageStatus.partiel, CoverageStatus.enCours, CoverageStatus.nonCouvert];
     const center = LatLng(49.4922, 0.1131);
     final List<Zone> zones = [];
     const double size = 0.001;
@@ -224,8 +224,8 @@ class MockApiService {
       switch (zone.coverageStatus) {
         case CoverageStatus.modele: pointCount = 100; break;
         case CoverageStatus.partiel: pointCount = 40; break;
-        case CoverageStatus.en_cours: pointCount = 15; break;
-        case CoverageStatus.non_couvert: pointCount = 2; break;
+        case CoverageStatus.enCours: pointCount = 15; break;
+        case CoverageStatus.nonCouvert: pointCount = 2; break;
       }
       for (int i = 0; i < pointCount; i++) {
         points.add(CapturePoint(location: _generateRandomPointInBounds(zone.polygon, random)));

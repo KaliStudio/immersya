@@ -38,6 +38,7 @@ class _GalleryScreenState extends State<GalleryScreen> with AutomaticKeepAliveCl
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mes Contributions'),
@@ -118,7 +119,7 @@ class _GalleryScreenState extends State<GalleryScreen> with AutomaticKeepAliveCl
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                      colors: [Colors.transparent, Colors.black.withAlpha(204)],
                     ),
                   ),
                 ),

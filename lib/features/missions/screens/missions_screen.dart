@@ -31,6 +31,7 @@ class _MissionsScreenState extends State<MissionsScreen> with AutomaticKeepAlive
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Missions Disponibles'),
@@ -99,7 +100,7 @@ class _MissionsScreenState extends State<MissionsScreen> with AutomaticKeepAlive
               children: [
                 Chip(
                   label: Text('${mission.rewardPoints} Points'),
-                  backgroundColor: Colors.amber.withOpacity(0.2),
+                  backgroundColor: Colors.amber.withAlpha(51),
                   labelStyle: const TextStyle(color: Colors.amber),
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),

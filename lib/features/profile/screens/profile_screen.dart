@@ -113,7 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
     if (newLocation.isNotEmpty) {
       final newCity = newLocation['city'];
       if (newCity != null && newCity != _currentProfile?.city) {
-         print("Changement de localisation détecté ! Mise à jour du profil.");
+         //print("Changement de localisation détecté ! Mise à jour du profil.");
          await apiService.updateMockUserLocation(
             userId,
             country: newLocation['country'],
@@ -131,6 +131,7 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (_isLoadingProfile) {
       return Scaffold(appBar: AppBar(title: const Text('Mon Profil')), body: const Center(child: CircularProgressIndicator()));
     }

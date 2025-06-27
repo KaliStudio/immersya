@@ -16,7 +16,7 @@ class AuthWrapper extends StatelessWidget {
 if (authService.isAuthenticated) {
       return MainShell(key: mainShellNavigatorKey);
     } else {
-      return LoginScreen();
+      return const LoginScreen();
     }
   }
 }

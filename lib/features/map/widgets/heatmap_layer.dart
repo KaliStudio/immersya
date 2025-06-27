@@ -51,8 +51,8 @@ class _HeatmapPainter extends CustomPainter {
 
       final gradient = RadialGradient(
         colors: [
-          Colors.red.withOpacity(0.3),
-          Colors.red.withOpacity(0.0),
+          Colors.red.withAlpha(77),
+          Colors.red.withAlpha(0),
         ],
         stops: const [0.0, 1.0],
       );

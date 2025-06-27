@@ -31,7 +31,7 @@ class MapFilterChips extends StatelessWidget {
                 // On utilise context.read car on est dans un callback, on ne veut pas écouter ici.
                 context.read<MapState>().toggleFilter(filter);
               },
-              backgroundColor: Colors.black.withOpacity(0.6),
+              backgroundColor: Colors.black.withAlpha(153),
               labelStyle: const TextStyle(color: Colors.white),
               selectedColor: Theme.of(context).colorScheme.primary,
               checkmarkColor: Colors.white,

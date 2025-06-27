@@ -30,11 +30,11 @@ class AuthService with ChangeNotifier {
     try {
       final user = _users.firstWhere((u) => u.email == email);
       _currentUser = user;
-      print('✅ Utilisateur connecté : ${_currentUser!.username}');
+      //print('✅ Utilisateur connecté : ${_currentUser!.username}');
       notifyListeners(); // Notifie tous les écouteurs que l'état a changé !
       return true;
     } catch (e) {
-      print('❌ Échec de la connexion : utilisateur non trouvé.');
+      //print('❌ Échec de la connexion : utilisateur non trouvé.');
       return false;
     }
   }
@@ -45,7 +45,7 @@ class AuthService with ChangeNotifier {
     
     // On vérifie si l'email n'est pas déjà pris.
     if (_users.any((u) => u.email == email)) {
-      print('❌ Échec de l\'inscription : email déjà utilisé.');
+      //print('❌ Échec de l\'inscription : email déjà utilisé.');
       return false;
     }
     
@@ -59,7 +59,7 @@ class AuthService with ChangeNotifier {
     
     // On connecte automatiquement l'utilisateur après l'inscription.
     _currentUser = newUser;
-    print('✅ Utilisateur inscrit et connecté : ${_currentUser!.username}');
+    //print('✅ Utilisateur inscrit et connecté : ${_currentUser!.username}');
     notifyListeners();
     return true;
   }
@@ -67,7 +67,7 @@ class AuthService with ChangeNotifier {
   // Déconnexion.
   Future<void> logout() async {
     _currentUser = null;
-    print('🚪 Utilisateur déconnecté.');
+    //print('🚪 Utilisateur déconnecté.');
     notifyListeners();
   }
 }
