@@ -3,11 +3,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:immersya_mobile_app/api/mock_api_service.dart';
 import 'package:provider/provider.dart';
 import 'package:immersya_mobile_app/services/location_service.dart';
-import 'package:visibility_detector/visibility_detector.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -15,108 +13,76 @@ class LeaderboardScreen extends StatefulWidget {
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
-class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+class _LeaderboardScreenState extends State<LeaderboardScreen> with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   TabController? _tabController;
   bool _isLoading = true;
+  // --- NOUVEAU : Un flag pour s'assurer que le chargement ne se fait qu'une fois ---
+  bool _isInitialLoad = true;
 
-  List<Tab> _tabs = [const Tab(text: 'Global')];
-  List<Widget> _tabViews = [const _LeaderboardListView(key: ValueKey('Global'))];
-
-  // Instanciation de notre service de localisation
+  List<Map<String, dynamic>> _tabData = [];
   final LocationService _locationService = LocationService();
-  
-  // Pour éviter des rechargements trop fréquents
-  DateTime _lastLoadTime = DateTime.now().subtract(const Duration(minutes: 1));
 
+  // @override
+  // void initState() {
+  //   super.initState();
+  //   // initState doit être le plus léger possible. On ne fait rien ici.
+  // }
+
+  // --- MODIFICATION PRINCIPALE : On utilise didChangeDependencies ---
+  // Cette méthode est appelée après initState et chaque fois qu'une dépendance change.
   @override
-  void initState() {
-    super.initState();
-    // On initialise un TabController minimaliste pour commencer.
-    // Il sera reconstruit plus tard.
-    _tabController = TabController(length: 1, vsync: this);
-  }
-
-  // Choisit la meilleure "région" disponible depuis un Placemark
-  String? _getBestRegion(Placemark placemark) {
-    if (placemark.administrativeArea != null && placemark.administrativeArea!.isNotEmpty) {
-      return placemark.administrativeArea; // Idéal : on a la région
-    }
-    if (placemark.subAdministrativeArea != null && placemark.subAdministrativeArea!.isNotEmpty) {
-      return placemark.subAdministrativeArea; // Sinon, on prend le département
-    }
-    return null; // Sinon, tant pis
-  }
-
-  // Cette méthode est appelée lorsque l'écran devient visible.
-  void _onVisibilityChanged(VisibilityInfo info) {
-    // On ne recharge que si l'écran est entièrement visible et si un certain temps s'est écoulé.
-    if (info.visibleFraction == 1.0 && DateTime.now().difference(_lastLoadTime).inSeconds > 30) {
-      //print("Leaderboard est visible, rafraîchissement des onglets GPS...");
-      _lastLoadTime = DateTime.now();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // On utilise le flag pour ne lancer le chargement qu'une seule fois.
+    if (_isInitialLoad) {
       _loadAndBuildTabsFromGPS();
+      _isInitialLoad = false;
     }
   }
 
-  // La logique principale pour construire les onglets dynamiquement
+  String? _getBestRegion(Placemark placemark) {
+    if (placemark.administrativeArea != null && placemark.administrativeArea!.isNotEmpty) return placemark.administrativeArea;
+    if (placemark.subAdministrativeArea != null && placemark.subAdministrativeArea!.isNotEmpty) return placemark.subAdministrativeArea;
+    return null;
+  }
+  
   Future<void> _loadAndBuildTabsFromGPS() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
     
-    // 1. Obtenir la position GPS
-    Position? position = await _locationService.getCurrentPosition();
+    final position = await _locationService.getCurrentPosition();
+    final placemark = position != null ? await _locationService.getPlacemarkFromCoordinates(position) : null;
     
-    // 2. Convertir la position en adresse (géocodage inverse)
-    Placemark? placemark;
-    if (position != null) {
-      try {
-        List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
-        if (placemarks.isNotEmpty) {
-          placemark = placemarks.first;
-          //print("📍 Localisation GPS pour les classements : ${placemark.locality}, ${placemark.country}");
-        }
-      } catch (e) {
-        //print("Erreur de géocodage pour le classement: $e");
-      }
-    }
-    
-    // 3. Construire les listes de Tabs et de TabViews
-    final newTabs = [const Tab(text: 'Global')];
-    final newViews = [const _LeaderboardListView(key: ValueKey('Global'))];
+    final newTabData = <Map<String, dynamic>>[
+      {'label': 'Global', 'filter': {}}
+    ];
     
     if (placemark != null) {
       final country = placemark.country;
-      final region = _getBestRegion(placemark); // On utilise notre helper
+      final region = _getBestRegion(placemark);
       final city = placemark.locality;
   
       if (country != null && country.isNotEmpty) {
-        newTabs.add(Tab(text: country));
-        newViews.add(_LeaderboardListView(key: ValueKey(country), country: country));
+        newTabData.add({'label': country, 'filter': {'country': country}});
       }
       if (region != null && region.isNotEmpty) {
-        newTabs.add(Tab(text: region));
-        newViews.add(_LeaderboardListView(key: ValueKey(region), region: region));
+        newTabData.add({'label': region, 'filter': {'region': region}});
       }
       if (city != null && city.isNotEmpty) {
-        newTabs.add(Tab(text: city));
-        newViews.add(_LeaderboardListView(key: ValueKey(city), city: city));
+        newTabData.add({'label': city, 'filter': {'city': city}});
       }
     }
     
-    // 4. Mettre à jour l'état de l'interface
     if (mounted) {
-      // Sauvegarder l'index actuel pour une transition fluide
       int previousIndex = _tabController?.index ?? 0;
-      
-      _tabController?.dispose();
+      _tabController?.dispose(); 
       
       setState(() {
-        _tabs = newTabs;
-        _tabViews = newViews;
+        _tabData = newTabData;
         _tabController = TabController(
-          length: _tabs.length, 
-          vsync: this, 
-          // Restaurer l'index précédent, en s'assurant qu'il est valide
-          initialIndex: min(previousIndex, _tabs.length - 1)
+          length: _tabData.length, 
+          vsync: this,
+          initialIndex: min(previousIndex, _tabData.length - 1)
         );
         _isLoading = false;
       });
@@ -134,62 +100,48 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-    return VisibilityDetector(
-      key: const Key('leaderboard-visibility-detector'),
-      onVisibilityChanged: _onVisibilityChanged,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Classements'),
-          centerTitle: true,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _isLoading ? null : _loadAndBuildTabsFromGPS,
-            )
-          ],
-          bottom: _isLoading
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(4.0),
-                child: LinearProgressIndicator(),
-              )
-            : _tabController != null 
-                ? TabBar(
-                    controller: _tabController,
-                    isScrollable: true,
-                    tabs: _tabs,
-                  )
-                : null,
-        ),
-        body: _isLoading 
-          ? const Center(child: CircularProgressIndicator()) 
-          : _tabController == null 
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text("Impossible de déterminer la localisation.", textAlign: TextAlign.center),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadAndBuildTabsFromGPS,
-                        child: const Text("Réessayer"),
-                      )
-                    ],
-                  ),
-                ),
-              )
-            : TabBarView(
+    super.build(context); // L'appel à super.build est nécessaire avec le mixin
+    
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Classements'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _isLoading ? null : _loadAndBuildTabsFromGPS,
+          )
+        ],
+        bottom: _isLoading
+          ? const PreferredSize(preferredSize: Size.fromHeight(4.0), child: LinearProgressIndicator())
+          : _tabController != null 
+            ? TabBar(
                 controller: _tabController,
-                children: _tabViews,
-              ),
+                isScrollable: true,
+                tabs: _tabData.map((data) => Tab(text: data['label'])).toList(),
+              )
+            : null,
       ),
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator()) 
+        : _tabController == null 
+          ? Center(child: ElevatedButton(onPressed: _loadAndBuildTabsFromGPS, child: const Text("Charger les classements")))
+          : TabBarView(
+              controller: _tabController,
+              children: _tabData.map((data) {
+                final filter = data['filter'];
+                return _LeaderboardListView(
+                  key: ValueKey(filter.toString()),
+                  country: filter['country'],
+                  region: filter['region'],
+                  city: filter['city'],
+                );
+              }).toList(),
+            ),
     );
   }
 }
 
-// Ce widget reste inchangé, il reçoit juste des filtres différents
 class _LeaderboardListView extends StatefulWidget {
   final String? country, region, city;
   const _LeaderboardListView({super.key, this.country, this.region, this.city});
@@ -256,7 +208,6 @@ class __LeaderboardListViewState extends State<_LeaderboardListView> with Automa
   bool get wantKeepAlive => true;
 }
 
-// Ce widget reste inchangé
 class _LeaderboardTile extends StatelessWidget {
   final UserProfile profile;
   final int rank;

@@ -4,7 +4,8 @@
     <application
         android:label="immersya_mobile_app"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/launcher_icon"
+        android:usesCleartextTraffic="true"> <!-- à supprimer en production-->
         <activity
             android:name=".MainActivity"
             android:exported="true"

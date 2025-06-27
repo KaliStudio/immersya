@@ -1,51 +1,98 @@
 // lib/services/location_service.dart
 
+import 'dart:convert';
+import 'package:flutter/foundation.dart'; // Nécessaire pour détecter la plateforme web (kIsWeb)
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 
 class LocationService {
 
-  // Récupère la position GPS actuelle de l'appareil.
-  // Gère les permissions et l'état du service GPS.
+  // Cette méthode pour obtenir la position GPS est déjà correcte.
   Future<Position?> getCurrentPosition() async {
-    // 1. Vérifier si le service de localisation est activé sur l'appareil.
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Si le service est désactivé, on ne peut rien faire.
-      //print("Le service de localisation est désactivé.");
-      // On pourrait demander à l'utilisateur de l'activer via `Geolocator.openLocationSettings()`
+      debugPrint("LocationService: Le service de localisation est désactivé.");
       return null;
     }
 
-    // 2. Vérifier les permissions de l'application.
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      // Si la permission est refusée, on la demande à l'utilisateur.
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // Si l'utilisateur refuse à nouveau, on abandonne.
-        //print("La permission de localisation a été refusée.");
+        debugPrint("LocationService: La permission de localisation a été refusée.");
         return null;
       }
     }
     
-    // 3. Gérer le cas où la permission est refusée de manière permanente.
     if (permission == LocationPermission.deniedForever) {
-      //print("La permission de localisation est refusée de manière permanente. L'application ne peut pas y accéder.");
-      // On pourrait ouvrir les paramètres de l'application pour que l'utilisateur change la permission.
-      // await Geolocator.openAppSettings();
+      debugPrint("LocationService: La permission de localisation est refusée de manière permanente.");
       return null;
     } 
 
-    // 4. Si les permissions sont accordées, on récupère la position.
-    //print("Permissions accordées. Récupération de la position GPS...");
     try {
-      return await Geolocator.getCurrentPosition(
-        // On peut ajuster la précision si besoin.
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
     } catch (e) {
-      //print("Erreur lors de la récupération de la position : $e");
+      debugPrint("LocationService: Erreur lors de la récupération de la position : $e");
       return null;
     }
+  }
+
+  // --- MÉTHODE DE GÉOCODAGE ENTIÈREMENT RÉÉCRITE ET ROBUSTE ---
+  Future<Placemark?> getPlacemarkFromCoordinates(Position position) async {
+    // Si on n'est PAS sur le web, on tente d'abord le plugin natif.
+    if (!kIsWeb) {
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+          localeIdentifier: "fr_FR",
+        );
+        if(placemarks.isNotEmpty) return placemarks.first;
+      } catch (e) {
+        debugPrint("Le géocodage natif a échoué, tentative via API externe. Erreur: $e");
+      }
+    }
+    
+    // --- PLAN B : API NOMINATIM (pour le web et en cas d'échec natif) ---
+    debugPrint("Utilisation de l'API de géocodage externe Nominatim.");
+    try {
+      // 1. Construire l'URL correcte pour l'API Nominatim
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.latitude}&lon=${position.longitude}&zoom=10&accept-language=fr'
+      );
+
+      // 2. Faire la requête HTTP avec un User-Agent personnalisé (requis par Nominatim)
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': 'ImmersyaPathfinder/1.0 (contact@immersya.com)', // Très important pour Nominatim
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      // 3. Parser la réponse
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['address'] != null) {
+          final address = data['address'];
+          // On reconstruit un objet Placemark avec les données de Nominatim
+          return Placemark(
+            locality: address['city'] ?? address['town'] ?? address['village'] ?? '',
+            administrativeArea: address['state'] ?? address['county'] ?? '', // Région ou Département
+            country: address['country'] ?? '',
+            isoCountryCode: address['country_code'] ?? '',
+            street: address['road'] ?? '',
+            postalCode: address['postcode'] ?? '',
+            subLocality: '', subAdministrativeArea: '', thoroughfare: '', subThoroughfare: '',
+          );
+        }
+      } else {
+        debugPrint("Erreur API Nominatim: ${response.statusCode} - ${response.body}");
+      }
+    } catch (e) {
+      debugPrint("Erreur de géocodage via API externe Nominatim: $e");
+    }
+    
+    return null; // On retourne null si tout a échoué.
   }
 }
