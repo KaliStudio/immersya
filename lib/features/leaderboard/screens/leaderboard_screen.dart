@@ -15,49 +15,46 @@ class LeaderboardScreen extends StatefulWidget {
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
-class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+// --- CORRECTION : On utilise TickerProviderStateMixin au lieu de SingleTickerProviderStateMixin ---
+class _LeaderboardScreenState extends State<LeaderboardScreen> with TickerProviderStateMixin {
   TabController? _tabController;
   bool _isLoading = true;
-
   List<Tab> _tabs = [const Tab(text: 'Global')];
   List<Widget> _tabViews = [const _LeaderboardListView(key: ValueKey('Global'))];
-
-  // Instanciation de notre service de localisation
   final LocationService _locationService = LocationService();
-  
-  // Pour éviter des rechargements trop fréquents
   DateTime _lastLoadTime = DateTime.now().subtract(const Duration(minutes: 1));
+  bool _isInitialLoad = true; // Pour s'assurer que onVisibilityChanged ne se lance pas au premier build
 
   @override
   void initState() {
     super.initState();
     // On initialise un TabController minimaliste pour commencer.
-    // Il sera reconstruit plus tard.
     _tabController = TabController(length: 1, vsync: this);
+    
+    // On lance le premier chargement depuis initState pour un affichage plus rapide
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadAndBuildTabsFromGPS().then((_) {
+        // Une fois le premier chargement terminé, on autorise les rafraîchissements par visibilité.
+        setState(() => _isInitialLoad = false);
+      });
+    });
   }
 
-  // Choisit la meilleure "région" disponible depuis un Placemark
   String? _getBestRegion(Placemark placemark) {
-    if (placemark.administrativeArea != null && placemark.administrativeArea!.isNotEmpty) {
-      return placemark.administrativeArea; // Idéal : on a la région
-    }
-    if (placemark.subAdministrativeArea != null && placemark.subAdministrativeArea!.isNotEmpty) {
-      return placemark.subAdministrativeArea; // Sinon, on prend le département
-    }
-    return null; // Sinon, tant pis
+    if (placemark.administrativeArea != null && placemark.administrativeArea!.isNotEmpty) return placemark.administrativeArea;
+    if (placemark.subAdministrativeArea != null && placemark.subAdministrativeArea!.isNotEmpty) return placemark.subAdministrativeArea;
+    return null;
   }
 
-  // Cette méthode est appelée lorsque l'écran devient visible.
   void _onVisibilityChanged(VisibilityInfo info) {
-    // On ne recharge que si l'écran est entièrement visible et si un certain temps s'est écoulé.
-    if (info.visibleFraction == 1.0 && DateTime.now().difference(_lastLoadTime).inSeconds > 30) {
-      //print("Leaderboard est visible, rafraîchissement des onglets GPS...");
+    // On ne recharge que si l'écran est visible, que ce n'est pas le premier chargement,
+    // et si un certain temps s'est écoulé.
+    if (info.visibleFraction == 1.0 && !_isInitialLoad && DateTime.now().difference(_lastLoadTime).inSeconds > 30) {
       _lastLoadTime = DateTime.now();
       _loadAndBuildTabsFromGPS();
     }
   }
 
-  // La logique principale pour construire les onglets dynamiquement
   Future<void> _loadAndBuildTabsFromGPS() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -102,20 +99,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
       }
     }
     
-    // 4. Mettre à jour l'état de l'interface
     if (mounted) {
-      // Sauvegarder l'index actuel pour une transition fluide
       int previousIndex = _tabController?.index ?? 0;
-      
-      _tabController?.dispose();
+      _tabController?.removeListener(() {}); // Bonne pratique de retirer les listeners avant de dispose
+      _tabController?.dispose(); 
       
       setState(() {
         _tabs = newTabs;
         _tabViews = newViews;
         _tabController = TabController(
           length: _tabs.length, 
-          vsync: this, 
-          // Restaurer l'index précédent, en s'assurant qu'il est valide
+          vsync: this,
           initialIndex: min(previousIndex, _tabs.length - 1)
         );
         _isLoading = false;
@@ -130,11 +124,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
   }
 
   @override
-  bool get wantKeepAlive => true;
-
-  @override
   Widget build(BuildContext context) {
-    super.build(context);
     return VisibilityDetector(
       key: const Key('leaderboard-visibility-detector'),
       onVisibilityChanged: _onVisibilityChanged,
@@ -149,37 +139,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
             )
           ],
           bottom: _isLoading
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(4.0),
-                child: LinearProgressIndicator(),
-              )
+            ? const PreferredSize(preferredSize: Size.fromHeight(4.0), child: LinearProgressIndicator())
             : _tabController != null 
-                ? TabBar(
-                    controller: _tabController,
-                    isScrollable: true,
-                    tabs: _tabs,
-                  )
-                : null,
+              ? TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  tabs: _tabs,
+                )
+              : null,
         ),
         body: _isLoading 
           ? const Center(child: CircularProgressIndicator()) 
           : _tabController == null 
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text("Impossible de déterminer la localisation.", textAlign: TextAlign.center),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadAndBuildTabsFromGPS,
-                        child: const Text("Réessayer"),
-                      )
-                    ],
-                  ),
-                ),
-              )
+            ? Center(child: ElevatedButton(onPressed: _loadAndBuildTabsFromGPS, child: const Text("Charger les classements")))
             : TabBarView(
                 controller: _tabController,
                 children: _tabViews,
