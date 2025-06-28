@@ -6,6 +6,7 @@ import 'package:immersya_mobile_app/features/map/screens/map_screen.dart';
 import 'package:immersya_mobile_app/features/missions/screens/missions_screen.dart';
 import 'package:immersya_mobile_app/features/profile/screens/profile_screen.dart';
 import 'package:immersya_mobile_app/features/leaderboard/screens/leaderboard_screen.dart';
+import 'package:immersya_mobile_app/features/team/screens/team_screen.dart';
 
 // La GlobalKey est essentielle pour la navigation entre les onglets
 final mainShellNavigatorKey = GlobalKey<MainShellState>();
@@ -52,6 +53,7 @@ class MainShellState extends State<MainShell> {
     MapScreen(),
     CaptureScreen(),
     MissionsScreen(),
+    TeamScreen(),
     GalleryScreen(),
     LeaderboardScreen(),
     ProfileScreen(),
@@ -75,6 +77,7 @@ class MainShellState extends State<MainShell> {
           BottomNavigationBarItem(icon: Icon(Icons.map_outlined), activeIcon: Icon(Icons.map), label: 'Carte'),
           BottomNavigationBarItem(icon: Icon(Icons.camera_alt_outlined), activeIcon: Icon(Icons.camera_alt), label: 'Capture'),
           BottomNavigationBarItem(icon: Icon(Icons.flag_outlined), activeIcon: Icon(Icons.flag), label: 'Missions'),
+          BottomNavigationBarItem(icon: Icon(Icons.group_outlined), activeIcon: Icon(Icons.group), label: 'Équipe'),
           BottomNavigationBarItem(icon: Icon(Icons.photo_library_outlined), activeIcon: Icon(Icons.photo_library), label: 'Galerie'),
           BottomNavigationBarItem(icon: Icon(Icons.leaderboard_outlined), activeIcon: Icon(Icons.leaderboard), label: 'Classement'),
           BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profil'),

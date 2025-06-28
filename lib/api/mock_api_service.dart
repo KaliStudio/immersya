@@ -1,15 +1,17 @@
 // lib/api/mock_api_service.dart
 
 import 'dart:math';
+//import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:immersya_mobile_app/features/gamification/models/badge_model.dart' as gamification_models;
 import 'package:immersya_mobile_app/models/capture_point_model.dart';
 import 'package:immersya_mobile_app/models/ghost_trace_model.dart';
+import 'package:immersya_mobile_app/models/team_model.dart';
 import 'package:immersya_mobile_app/models/zone_model.dart';
 import 'package:latlong2/latlong.dart';
 
 // ===================================================================
-// DÉFINITION DES MODÈLES DE DONNÉES
+// DÉFINITION DES MODÈLES
 // ===================================================================
 
 enum MissionPriority { low, medium, high }
@@ -19,84 +21,58 @@ class Mission {
   final int rewardPoints;
   final MissionPriority priority;
   final LatLng location;
-
-  Mission({
-    required this.id, required this.title, required this.description,
-    required this.rewardPoints, required this.priority, required this.location,
-  });
+  Mission({required this.id, required this.title, required this.description, required this.rewardPoints, required this.priority, required this.location});
 }
 
-// MODIFIÉ : UserProfile stocke maintenant une localisation détaillée (pays, région, ville)
+// MODIFIÉ : UserProfile est enrichi pour les équipes
 class UserProfile {
+  final String id;
   final String username, rank;
   final int immersyaPoints, scansValidated;
   final double areaCoveredKm2;
-  final String? country, region, city;
+  final String? country, region, city, teamId;
+  final LatLng? lastKnownPosition;
 
   UserProfile({
-    required this.username, required this.rank, required this.immersyaPoints,
+    required this.id, required this.username, required this.rank, required this.immersyaPoints,
     required this.areaCoveredKm2, required this.scansValidated,
-    this.country, this.region, this.city,
+    this.country, this.region, this.city, this.teamId, this.lastKnownPosition,
   });
 
-  // Helper pratique pour créer une copie d'un profil avec des valeurs modifiées.
   UserProfile copyWith({
-    String? username, String? rank, int? immersyaPoints, double? areaCoveredKm2,
+    String? id, String? username, String? rank, int? immersyaPoints, double? areaCoveredKm2,
     int? scansValidated, String? country, String? region, String? city,
-  }) {
-    return UserProfile(
-      username: username ?? this.username,
-      rank: rank ?? this.rank,
+    ValueGetter<String?>? teamId, ValueGetter<LatLng?>? lastKnownPosition,
+  }) => UserProfile(
+      id: id ?? this.id,
+      username: username ?? this.username, rank: rank ?? this.rank,
       immersyaPoints: immersyaPoints ?? this.immersyaPoints,
       areaCoveredKm2: areaCoveredKm2 ?? this.areaCoveredKm2,
       scansValidated: scansValidated ?? this.scansValidated,
-      country: country ?? this.country,
-      region: region ?? this.region,
-      city: city ?? this.city,
-    );
-  }
+      country: country ?? this.country, region: region ?? this.region, city: city ?? this.city,
+      teamId: teamId != null ? teamId() : this.teamId,
+      lastKnownPosition: lastKnownPosition != null ? lastKnownPosition() : this.lastKnownPosition,
+  );
 }
 
-// NOUVEAU : Modèle pour enregistrer une capture dans l'historique
 class CaptureRecord {
-  final String userId;
-  final LatLng location;
-  final DateTime timestamp;
+  final String userId; final LatLng location; final DateTime timestamp;
   CaptureRecord({required this.userId, required this.location, required this.timestamp});
 }
 
 enum ContributionStatus { pending, processing, failed, completed }
-
 class ContributionComment {
-  final String username;
-  final String comment;
+  final String username, comment;
   final DateTime date;
-
-  ContributionComment({
-    required this.username,
-    required this.comment,
-    required this.date,
-  });
+  ContributionComment({required this.username, required this.comment, required this.date});
 }
-
 class Contribution {
-  final String id;
-  final String title;
-  final DateTime date;
-  final String type;
-  final ContributionStatus status;
-  final int photoCount;
-  final String? thumbnailUrl;
+  final String id, title, type;
+  final DateTime date; final ContributionStatus status; final int photoCount;
+  final String? thumbnailUrl, model3DUrl;
   final double qualityScore;
   final List<ContributionComment> comments;
-  final String? model3DUrl;
-
-  Contribution({
-    required this.id, required this.title, required this.date,
-    required this.type, required this.status, required this.photoCount,
-    this.thumbnailUrl, required this.qualityScore, required this.comments,
-    this.model3DUrl,
-  });
+  Contribution({required this.id, required this.title, required this.date, required this.type, required this.status, required this.photoCount, this.thumbnailUrl, required this.qualityScore, required this.comments, this.model3DUrl});
 }
 
 // ===================================================================
@@ -104,25 +80,149 @@ class Contribution {
 // ===================================================================
 
 class MockApiService {
+  MockApiService(); // Constructeur public standard
+
   final _random = Random();
 
   // --- BASES DE DONNÉES FICTIVES ---
+  final Map<String, Team> _teams = {
+    'team_alpha': Team(id: 'team_alpha', name: 'Alpha Scanners', tag: '[ALPHA]', description: 'Pionniers de la capture 3D.', bannerUrl: 'https://i.imgur.com/example_banner_1.png', creatorId: '1'),
+    'team_delta': Team(id: 'team_delta', name: 'Delta Force 3D', tag: '[DELTA]', description: 'Précision et efficacité.', bannerUrl: 'https://i.imgur.com/example_banner_2.png', creatorId: '2'),
+  };
+
   final Map<String, UserProfile> _userProfiles = {
-    '1': UserProfile(username: "Pathfinder_Demo", rank: "Cartographe de Bronze", immersyaPoints: 12540, areaCoveredKm2: 2.5, scansValidated: 87, country: "Japon", region: "Kantō", city: "Tokyo"),
-    '2': UserProfile(username: "MagicArtistes", rank: "Maître des Données", immersyaPoints: 56200, areaCoveredKm2: 12.1, scansValidated: 312, country: "France", region: "Normandie", city: "Le Havre"),
-    '3': UserProfile(username: "PixelPioneer", rank: "Architecte Virtuel", immersyaPoints: 31050, areaCoveredKm2: 7.8, scansValidated: 154, country: "France", region: "Île-de-France", city: "Paris"),
-    '4': UserProfile(username: "SkyScanner", rank: "Explorateur d'Argent", immersyaPoints: 21800, areaCoveredKm2: 4.2, scansValidated: 99, country: "France", region: "Auvergne-Rhône-Alpes", city: "Lyon"),
-    '5': UserProfile(username: "NewbieMapper", rank: "Recrue", immersyaPoints: 500, areaCoveredKm2: 0.1, scansValidated: 5, country: "France", region: "Île-de-France", city: "Paris"),
+    '1': UserProfile(id: '1', username: "MagicArtistes", rank: "Cartographe de Bronze", immersyaPoints: 12540, areaCoveredKm2: 2.5, scansValidated: 87, country: "France", region: "Normandie", city: "Le Havre", teamId: 'team_alpha', lastKnownPosition: const LatLng(49.49, 0.10)),
+    '2': UserProfile(id: '2', username: "GeoNinja", rank: "Maître des Données", immersyaPoints: 56200, areaCoveredKm2: 12.1, scansValidated: 312, country: "Japon", region: "Kantō", city: "Tokyo", teamId: 'team_delta'),
+    '3': UserProfile(id: '3', username: "PixelPioneer", rank: "Architecte Virtuel", immersyaPoints: 31050, areaCoveredKm2: 7.8, scansValidated: 154, country: "France", region: "Normandie", city: "Le Havre", teamId: 'team_alpha', lastKnownPosition: const LatLng(49.50, 0.12)),
+    '4': UserProfile(id: '4', username: "SkyScanner", rank: "Explorateur d'Argent", immersyaPoints: 21800, areaCoveredKm2: 4.2, scansValidated: 99, country: "France", region: "Auvergne-Rhône-Alpes", city: "Lyon"),
+    '5': UserProfile(id: '5', username: "NewbieMapper", rank: "Recrue", immersyaPoints: 500, areaCoveredKm2: 0.1, scansValidated: 5, country: "France", region: "Île-de-France", city: "Paris", teamId: 'team_alpha'),
   };
 
   final List<CaptureRecord> _captureHistory = [];
 
-  // --- NOUVELLES MÉTHODES POUR LA STRATÉGIE B ---
+  // --- NOUVELLES MÉTHODES POUR LES ÉQUIPES ET LA CARTE ---
+
+  Future<List<Team>> fetchAllTeams() async {
+    await Future.delayed(const Duration(milliseconds: 400));
+    return _teams.values.toList();
+  }
+
+  Future<Team?> fetchTeamDetails(String teamId) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    return _teams[teamId];
+  }
+
+  Future<List<UserProfile>> fetchTeamMembers(String teamId) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return _userProfiles.values.where((p) => p.teamId == teamId).toList();
+  }
+
+  Future<void> updateUserPosition(String userId, LatLng newPosition) async {
+    if (_userProfiles.containsKey(userId)) {
+      _userProfiles[userId] = _userProfiles[userId]!.copyWith(lastKnownPosition: () => newPosition);
+    }
+  }
+
+    // NOUVEAU : Permet à un utilisateur de rejoindre une équipe
+  Future<bool> joinTeam(String userId, String teamId) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (_userProfiles.containsKey(userId) && _teams.containsKey(teamId)) {
+      _userProfiles[userId] = _userProfiles[userId]!.copyWith(teamId: () => teamId);
+      debugPrint("API: L'utilisateur $userId a rejoint l'équipe $teamId.");
+      return true;
+    }
+    return false;
+  }
   
+// NOUVEAU : Permet de quitter une équipe
+  Future<void> leaveTeam(String userId) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    final userProfile = _userProfiles[userId];
+    if (userProfile == null || userProfile.teamId == null) return; // L'utilisateur n'est dans aucune équipe
+
+    final teamId = userProfile.teamId!;
+    final team = _teams[teamId];
+    if (team == null) return; // L'équipe n'existe pas, cas étrange
+
+    // Cas 1 : L'utilisateur qui quitte N'EST PAS le créateur
+    if (userId != team.creatorId) {
+      _userProfiles[userId] = userProfile.copyWith(teamId: () => null);
+      debugPrint("API: Le membre $userId a quitté l'équipe $teamId.");
+      return;
+    }
+
+    // Cas 2 : L'utilisateur qui quitte EST le créateur
+    final members = _userProfiles.values.where((p) => p.teamId == teamId).toList();
+    
+    // Cas 2a : Le créateur est le dernier membre -> l'équipe est dissoute
+    if (members.length <= 1) {
+      _teams.remove(teamId);
+      _userProfiles[userId] = userProfile.copyWith(teamId: () => null);
+      debugPrint("API: Le créateur $userId a quitté l'équipe $teamId, qui a été dissoute.");
+    } 
+    // Cas 2b : Il reste d'autres membres -> on transfère la propriété
+    else {
+      // On retire le créateur actuel de la liste des candidats
+      final otherMembers = _userProfiles.entries.where((entry) => entry.value.teamId == teamId && entry.key != userId).toList();
+      
+      // (Pour une vraie app, on prendrait le plus ancien)
+      // Ici, on prend simplement le premier autre membre de la liste.
+      final newCreatorEntry = otherMembers.first;
+      final newCreatorId = newCreatorEntry.key;
+
+      // On met à jour l'équipe avec le nouvel ID du créateur
+      _teams[teamId] = Team(
+        id: team.id, name: team.name, tag: team.tag, description: team.description, 
+        bannerUrl: team.bannerUrl, creatorId: newCreatorId
+      );
+
+      // On retire l'ancien créateur de l'équipe
+      _userProfiles[userId] = userProfile.copyWith(teamId: () => null);
+      debugPrint("API: Le créateur $userId a quitté. La propriété de l'équipe $teamId est transférée à $newCreatorId.");
+    }
+  }
+  
+  Future<Team?> createTeam(String teamName, String teamTag, String creatorId) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (_teams.values.any((team) => team.name == teamName || team.tag == teamTag)) {
+      return null; // Nom ou tag déjà pris
+    }
+    final newTeamId = 'team_${DateTime.now().millisecondsSinceEpoch}';
+    final newTeam = Team(
+      id: newTeamId,
+      name: teamName,
+      tag: '[$teamTag]',
+      description: 'Une nouvelle équipe pleine de potentiel !',
+      bannerUrl: 'https://i.imgur.com/default_banner.png',
+      creatorId: creatorId,
+    );
+    _teams[newTeamId] = newTeam;
+    // Le créateur rejoint automatiquement son équipe
+    await joinTeam(creatorId, newTeamId);
+    return newTeam;
+  }
+
+  Future<bool> excludeMember(String memberId, String teamId) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    final userProfile = _userProfiles[memberId];
+    // On vérifie que l'utilisateur existe et qu'il est bien dans l'équipe en question
+    if (userProfile != null && userProfile.teamId == teamId) {
+      // On met son teamId à null, ce qui équivaut à une exclusion
+      _userProfiles[memberId] = userProfile.copyWith(teamId: () => null);
+      debugPrint("API: Le membre $memberId a été exclu de l'équipe $teamId.");
+      return true;
+    }
+    
+    // L'utilisateur n'était pas dans l'équipe ou n'existe pas
+    debugPrint("API: Échec de l'exclusion du membre $memberId.");
+    return false;
+  }
+
   Future<void> logCapture(String userId, LatLng location) async {
     await Future.delayed(const Duration(milliseconds: 100));
     _captureHistory.add(CaptureRecord(userId: userId, location: location, timestamp: DateTime.now()));
-    //print("API: Capture enregistrée pour l'utilisateur $userId");
   }
 
   Future<List<CaptureRecord>> fetchCaptureHistory(String userId) async {
@@ -133,11 +233,8 @@ class MockApiService {
   Future<void> updateMockUserLocation(String userId, {String? country, String? region, String? city}) async {
     if (_userProfiles.containsKey(userId)) {
       _userProfiles[userId] = _userProfiles[userId]!.copyWith(country: country, region: region, city: city);
-      //print("API: Profil $userId mis à jour -> Pays: $country, Région: $region, Ville: $city");
     }
   }
-
-  // --- MÉTHODES EXISTANTES MODIFIÉES OU CONSERVÉES ---
 
   Future<List<UserProfile>> fetchAllUserProfiles({String? country, String? region, String? city}) async {
     await Future.delayed(const Duration(milliseconds: 700));
@@ -164,12 +261,8 @@ class MockApiService {
     if (_userProfiles.containsKey(userId)) return _userProfiles[userId]!;
     
     final newProfile = UserProfile(
-      username: "Nouvelle Recrue", 
-      rank: "Aspirant", 
-      immersyaPoints: 0, 
-      areaCoveredKm2: 0.0, 
-      scansValidated: 0,
-      country: null, region: null, city: null,
+      id: userId, username: "Nouvelle Recrue", rank: "Aspirant", immersyaPoints: 0,
+      areaCoveredKm2: 0.0, scansValidated: 0
     );
     _userProfiles[userId] = newProfile;
     return newProfile;
