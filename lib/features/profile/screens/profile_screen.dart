@@ -6,10 +6,11 @@ import 'package:immersya_mobile_app/features/capture/capture_state.dart';
 import 'package:immersya_mobile_app/features/profile/screens/settings_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:immersya_mobile_app/features/auth/services/auth_service.dart';
-import 'package:immersya_mobile_app/models/user_model.dart';
+// import 'package:immersya_mobile_app/models/user_model.dart';
 import 'package:immersya_mobile_app/features/gamification/models/badge_model.dart' as gamification_models;
 import 'package:immersya_mobile_app/features/gamification/services/gamification_service.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:immersya_mobile_app/models/team_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,31 +19,31 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveClientMixin  {
-  // --- VARIABLES D'ÉTAT ---
-  User? _currentUser;
-  UserProfile? _currentProfile;
-  late GamificationService _gamificationService;
-  List<gamification_models.Badge> _unlockedBadges = [];
-  bool _isLoadingProfile = true;
+  // Un seul Future pour piloter le chargement de toutes les données de l'écran
+  Future<Map<String, dynamic>>? _profileDataFuture;
+
+  // Services
   late CaptureState _captureState;
+  
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Initialisation des services et de l'écouteur
-      final apiService = context.read<MockApiService>();
-      _gamificationService = GamificationService(apiService);
+    // On utilise didChangeDependencies pour un accès sûr au Provider
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // On ne charge les données qu'une seule fois au début
+    if (_profileDataFuture == null) {
+      // On s'abonne à CaptureState ici
       _captureState = context.read<CaptureState>();
       _captureState.addListener(_onCaptureStateChanged);
-      _currentUser = context.read<AuthService>().currentUser;
-      
-      if (_currentUser != null) {
-        _loadProfileData();
-      } else {
-        setState(() => _isLoadingProfile = false);
-      }
-    });
+      _loadProfileData();
+    }
   }
 
   @override
@@ -51,114 +52,140 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
     super.dispose();
   }
 
-  // --- LOGIQUE DE GESTION DES DONNÉES ---
-
-  // Recharge toutes les données du profil et des badges depuis l'API.
-  Future<void> _loadProfileData() async {
-    if (!mounted) return;
-    setState(() => _isLoadingProfile = true);
-
-    if (_currentUser != null) {
-      final apiService = context.read<MockApiService>();
-      final profile = await apiService.fetchUserProfile(userId: _currentUser!.id);
-      final badges = await _gamificationService.getUnlockedBadges(profile);
-      
-      if (mounted) {
-        setState(() {
-          _currentProfile = profile;
-          _unlockedBadges = badges;
-          _isLoadingProfile = false;
-        });
-      }
-    } else {
-       if (mounted) setState(() => _isLoadingProfile = false);
-    }
+  // Recharge toutes les données depuis l'API en assignant un nouveau Future
+  void _loadProfileData() {
+    setState(() {
+      _profileDataFuture = _fetchProfileData();
+    });
   }
 
-  // Méthode appelée chaque fois qu'une capture est terminée.
-  void _onCaptureStateChanged() {
-    final lastLocation = _captureState.lastCaptureLocation;
-    // On vérifie que toutes les conditions sont réunies pour une mise à jour.
-    if (_captureState.lastGainedPoints > 0 && _currentProfile != null && _currentUser != null && lastLocation != null) {
-      
-      // 1. Mettre à jour l'UI immédiatement pour le feedback des points (mise à jour locale)
-      if (mounted) {
-        setState(() {
-          _currentProfile = _currentProfile!.copyWith(
-            scansValidated: _currentProfile!.scansValidated + 1,
-            immersyaPoints: _currentProfile!.immersyaPoints + _captureState.lastGainedPoints,
-          );
-        });
-      }
-      
-      // 2. Lancer la logique complexe de mise à jour de la localisation en arrière-plan
-      _updateProfileLocationInBackground(lastLocation);
-    }
-  }
-
-  // Lance le processus de mise à jour de la localisation principale.
-  Future<void> _updateProfileLocationInBackground(LatLng lastCaptureLocation) async {
-    if (_currentUser == null) return;
-    
-    final userId = _currentUser!.id;
+  // Fonction centrale pour récupérer toutes les données nécessaires à l'écran
+  Future<Map<String, dynamic>> _fetchProfileData() async {
+    final authService = context.read<AuthService>();
     final apiService = context.read<MockApiService>();
+    final gamificationService = GamificationService(apiService);
+
+    final userId = authService.currentUser?.id;
+    if (userId == null) throw Exception("Utilisateur non authentifié.");
+
+    // 1. Charger le profil de l'utilisateur
+    final userProfile = await apiService.fetchUserProfile(userId: userId);
     
-    // a. Enregistrer la nouvelle capture dans l'historique
+    // 2. Si le profil a un teamId, charger les détails de l'équipe
+    Team? team;
+    if (userProfile.teamId != null) {
+      team = await apiService.fetchTeamDetails(userProfile.teamId!);
+    }
+    
+    // 3. Charger les badges débloqués
+    final badges = await gamificationService.getUnlockedBadges(userProfile);
+
+    // On retourne un Map avec toutes les données pour le FutureBuilder
+    return {
+      'profile': userProfile,
+      'team': team,
+      'badges': badges,
+    };
+  }
+  
+  // Met à jour l'état local après une capture, sans recharger depuis l'API
+  void _onCaptureStateChanged() async {
+    // S'assurer que le Future est complété avant de lire ses données
+    if (_profileDataFuture == null) return;
+    
+    final currentData = await _profileDataFuture!;
+    UserProfile currentProfile = currentData['profile'];
+    
+    if (_captureState.lastGainedPoints > 0) {
+      UserProfile updatedProfile = currentProfile.copyWith(
+        scansValidated: currentProfile.scansValidated + 1,
+        immersyaPoints: currentProfile.immersyaPoints + _captureState.lastGainedPoints,
+      );
+      
+      // On met à jour le Future avec les nouvelles données locales pour un affichage immédiat
+      setState(() {
+        _profileDataFuture = Future.value({
+          'profile': updatedProfile,
+          'team': currentData['team'],
+          'badges': currentData['badges'],
+        });
+      });
+      
+      // En arrière-plan, on lance la mise à jour de la localisation
+      if (_captureState.lastCaptureLocation != null && context.read<AuthService>().currentUser != null) {
+        _updateProfileLocationInBackground(_captureState.lastCaptureLocation!);
+      }
+    }
+  }
+
+  Future<void> _updateProfileLocationInBackground(LatLng lastCaptureLocation) async {
+    final authService = context.read<AuthService>();
+    final apiService = context.read<MockApiService>();
+    final gamificationService = GamificationService(apiService);
+
+    final userId = authService.currentUser?.id;
+    if (userId == null) return;
+    
     await apiService.logCapture(userId, lastCaptureLocation);
+    final newLocation = await gamificationService.determinePrimaryLocation(userId);
 
-    // b. Déterminer la nouvelle localisation principale à partir de l'historique
-    final newLocation = await _gamificationService.determinePrimaryLocation(userId);
-
-    // c. Si la localisation principale a changé, on met à jour le profil dans l'API
     if (newLocation.isNotEmpty) {
-      final newCity = newLocation['city'];
-      if (newCity != null && newCity != _currentProfile?.city) {
-         //print("Changement de localisation détecté ! Mise à jour du profil.");
+      final currentData = await _profileDataFuture!;
+      final currentProfile = currentData['profile'] as UserProfile;
+      
+      if (newLocation['city'] != null && newLocation['city'] != currentProfile.city) {
          await apiService.updateMockUserLocation(
             userId,
             country: newLocation['country'],
             region: newLocation['region'],
-            city: newCity,
+            city: newLocation['city'],
          );
-        // d. Recharger toutes les données pour que l'UI soit parfaitement synchronisée
-        if (mounted) _loadProfileData();
+         _loadProfileData(); // On recharge tout pour que les données soient à jour
       }
     }
   }
 
   @override
-  bool get wantKeepAlive => true;
-
-  @override
   Widget build(BuildContext context) {
     super.build(context);
-    if (_isLoadingProfile) {
-      return Scaffold(appBar: AppBar(title: const Text('Mon Profil')), body: const Center(child: CircularProgressIndicator()));
-    }
-    if (_currentProfile == null) {
-      return Scaffold(appBar: AppBar(title: const Text('Mon Profil')), body: const Center(child: Text("Connectez-vous pour voir votre profil.")));
-    }
-    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mon Profil'),
         centerTitle: true,
         actions: [
-          IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
-          }),
+          IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()))),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadProfileData,
-        child: _buildProfileView(_currentProfile!),
+        onRefresh: () async => _loadProfileData(),
+        child: FutureBuilder<Map<String, dynamic>>(
+          future: _profileDataFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text("Erreur: ${snapshot.error}"));
+            }
+            if (!snapshot.hasData) {
+              return const Center(child: Text("Aucun profil trouvé."));
+            }
+
+            final profile = snapshot.data!['profile'] as UserProfile;
+            final team = snapshot.data!['team'] as Team?;
+            final badges = snapshot.data!['badges'] as List<gamification_models.Badge>;
+
+            return _buildProfileView(profile, team, badges);
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildProfileView(UserProfile profile) {
+  Widget _buildProfileView(UserProfile profile, Team? team, List<gamification_models.Badge> badges) {
     final theme = Theme.of(context);
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16.0),
       children: [
         // Header du profil
@@ -171,7 +198,11 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
               const SizedBox(height: 16),
               Text(profile.username, style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text(profile.rank, style: theme.textTheme.titleLarge?.copyWith(color: Colors.cyanAccent)),
+              // Affiche le nom de l'équipe si elle existe, sinon le rang
+              if (team != null)
+                Text("${team.tag} ${team.name}", style: theme.textTheme.titleMedium?.copyWith(color: Colors.cyan))
+              else
+                Text(profile.rank, style: theme.textTheme.titleLarge?.copyWith(color: Colors.grey[400])),
             ],
           ),
         ),
@@ -188,9 +219,9 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
         const SizedBox(height: 24),
         
         // Section des badges
-        Text('Badges Débloqués (${_unlockedBadges.length})', style: theme.textTheme.titleLarge),
+        Text('Badges Débloqués (${badges.length})', style: theme.textTheme.titleLarge),
         const SizedBox(height: 16),
-        _buildBadgesSection(),
+        _buildBadgesSection(badges),
         const SizedBox(height: 32),
 
         // Bouton de déconnexion
@@ -198,11 +229,7 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
           onPressed: () => context.read<AuthService>().logout(),
           icon: const Icon(Icons.logout),
           label: const Text('Se Déconnecter'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red[700],
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-          ),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
         ),
       ],
     );
@@ -221,33 +248,22 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
     );
   }
 
-  Widget _buildBadgesSection() {
-    if (_unlockedBadges.isEmpty) {
+  Widget _buildBadgesSection(List<gamification_models.Badge> badges) {
+    if (badges.isEmpty) {
       return Card(
         color: Theme.of(context).colorScheme.surface,
         child: const Padding(
           padding: EdgeInsets.all(24.0),
-          child: Text(
-            "Continuez à explorer pour débloquer votre premier badge !",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontStyle: FontStyle.italic),
-          ),
+          child: Text("Continuez à explorer pour débloquer votre premier badge !", textAlign: TextAlign.center, style: TextStyle(fontStyle: FontStyle.italic)),
         ),
       );
     }
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: _unlockedBadges.length,
-      itemBuilder: (context, index) {
-        final badge = _unlockedBadges[index];
-        return _BadgeWidget(badge: badge);
-      },
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, crossAxisSpacing: 12, mainAxisSpacing: 12),
+      itemCount: badges.length,
+      itemBuilder: (context, index) => _BadgeWidget(badge: badges[index]),
     );
   }
 }
@@ -255,7 +271,6 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
 class _BadgeWidget extends StatelessWidget {
   final gamification_models.Badge badge;
   const _BadgeWidget({required this.badge});
-
   @override
   Widget build(BuildContext context) {
     return Tooltip(
@@ -274,10 +289,7 @@ class _BadgeWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Ink(
           padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-          ),
+          decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(12)),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -286,11 +298,7 @@ class _BadgeWidget extends StatelessWidget {
               Expanded(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text(
-                    badge.name,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
+                  child: Text(badge.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
