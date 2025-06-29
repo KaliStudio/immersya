@@ -76,10 +76,24 @@ class AuthService with ChangeNotifier {
     }
   }
   
+// dans lib/features/auth/services/auth_service.dart
+
   Future<void> refreshCurrentUser() async {
-    if (_currentUser == null) return;
-    _currentUser = await _apiService!.fetchUserProfile(userId: _currentUser!.id);
+    if (_currentUser == null || _apiService == null) return;
+    
+    _isLoading = true;
     notifyListeners();
+    
+    try {
+      _currentUser = await _apiService!.fetchUserProfile(userId: _currentUser!.id);
+    } catch (e) {
+      _error = "Erreur de rafraîchissement: $e";
+      // On pourrait déconnecter l'utilisateur si son profil n'existe plus.
+      // _currentUser = null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> logout() async {

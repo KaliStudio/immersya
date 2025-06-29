@@ -141,7 +141,11 @@ class _MapScreenState extends State<MapScreen> with AutomaticKeepAliveClientMixi
                   },
                 ),
                 children: [
-                  TileLayer(urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', subdomains: const ['a', 'b', 'c', 'd']),
+                  TileLayer(
+                    urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                    subdomains: const ['a', 'b', 'c', 'd'],
+                    retinaMode: RetinaMode.isHighDensity(context), 
+                  ),
                   if (mapState.isFilterActive(MapFilter.ghostTraces)) PolylineLayer(polylines: mapState.ghostTraces.map((trace) => Polyline(points: trace.path, color: Colors.blueAccent.withAlpha(102), strokeWidth: 3.0)).toList()),
                   if (mapState.isFilterActive(MapFilter.zones)) PolygonLayer(polygons: mapState.zones.map((zone) { final color = _getColorForStatus(zone.coverageStatus); return Polygon(points: zone.polygon, color: color, borderColor: color.withAlpha(204), borderStrokeWidth: 1.5, isFilled: true);}).toList()),
                   if (mapState.isFilterActive(MapFilter.heatmap)) HeatmapLayer(points: mapState.capturePoints, controller: _mapController),

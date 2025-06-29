@@ -3,111 +3,61 @@
 import 'package:flutter/material.dart';
 import 'package:immersya_mobile_app/api/mock_api_service.dart';
 import 'package:immersya_mobile_app/features/auth/services/auth_service.dart';
+import 'package:immersya_mobile_app/features/team/state/team_state.dart';
 import 'package:immersya_mobile_app/models/team_model.dart';
 import 'package:provider/provider.dart';
 
-class TeamScreen extends StatefulWidget {
+class TeamScreen extends StatelessWidget {
   const TeamScreen({super.key});
-  @override
-  State<TeamScreen> createState() => _TeamScreenState();
-}
-
-class _TeamScreenState extends State<TeamScreen> {
-  // Un seul Future pour piloter tout l'écran
-  Future<Map<String, dynamic>>? _teamDataFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    // On lance le chargement initial des données
-    _loadTeamData();
-  }
-  
-  // Méthode pour (re)charger toutes les données nécessaires
-  void _loadTeamData() {
-    setState(() {
-      _teamDataFuture = _fetchTeamData();
-    });
-  }
-  
-  // Fonction asynchrone qui récupère les données
-  Future<Map<String, dynamic>> _fetchTeamData() async {
-    // On utilise context.read car on est dans une méthode appelée par l'état
-    final authService = context.read<AuthService>();
-    final apiService = context.read<MockApiService>();
-    final currentUser = authService.currentUser;
-
-    if (currentUser == null) throw Exception("Utilisateur non connecté");
-
-    final userProfile = await apiService.fetchUserProfile(userId: currentUser.id);
-    final teamId = userProfile.teamId;
-    
-    // Si l'utilisateur n'a pas d'équipe, on retourne une structure vide
-    if (teamId == null) {
-      return {'team': null, 'members': <UserProfile>[], 'currentUserId': currentUser.id};
-    }
-
-    // Si l'utilisateur a une équipe, on charge ses détails et la liste des membres
-    final results = await Future.wait([
-      apiService.fetchTeamDetails(teamId),
-      apiService.fetchTeamMembers(teamId),
-    ]);
-
-    return {
-      'team': results[0] as Team?,
-      'members': (results[1] as List).cast<UserProfile>().toList(),
-      'currentUserId': currentUser.id
-    };
-  }
 
   @override
   Widget build(BuildContext context) {
+    final teamState = context.watch<TeamState>();
+    final authService = context.watch<AuthService>();
+    final currentUserId = authService.currentUser?.id;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mon Équipe'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadTeamData,
+            onPressed: () {
+              if (teamState.currentTeam != null) {
+                // On utilise context.read pour appeler une méthode.
+                context.read<TeamState>().fetchTeamDetails(teamState.currentTeam!.id);
+              }
+            },
           ),
         ],
       ),
-      body: FutureBuilder<Map<String, dynamic>?>(
-        future: _teamDataFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      body: Builder(
+        builder: (context) {
+          if (teamState.isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
-            return Center(child: Text("Erreur: ${snapshot.error}."));
+          if (teamState.error != null) {
+            return Center(child: Text("Erreur: ${teamState.error}"));
           }
-          if (!snapshot.hasData || snapshot.data == null) {
-            return Center(child: ElevatedButton(onPressed: _loadTeamData, child: const Text("Réessayer")));
+          if (currentUserId == null) {
+            return const Center(child: Text("Veuillez vous connecter."));
           }
-          
-          final Team? team = snapshot.data!['team'];
-          final List<UserProfile> members = snapshot.data!['members'];
-          final String currentUserId = snapshot.data!['currentUserId'];
-
-          if (team == null) {
-            return _NoTeamView(onActionCompleted: _loadTeamData);
+          if (teamState.currentTeam == null) {
+            return const _NoTeamView(); // CORRECTION : Plus besoin de passer de callback.
           }
           return _TeamDetailsView(
-            team: team, 
-            members: members, 
-            currentUserId: currentUserId, 
-            onActionCompleted: _loadTeamData,
-          );
+            team: teamState.currentTeam!,
+            members: teamState.members,
+            currentUserId: currentUserId,
+          ); // CORRECTION : Plus besoin de passer de callback.
         },
       ),
     );
   }
 }
 
-// --- WIDGET QUAND L'UTILISATEUR N'A PAS D'ÉQUIPE ---
 class _NoTeamView extends StatelessWidget {
-  final VoidCallback onActionCompleted;
-  const _NoTeamView({required this.onActionCompleted});
+  const _NoTeamView(); // CORRECTION : Constructeur simple.
 
   void _showCreateTeamDialog(BuildContext context) {
     final formKey = GlobalKey<FormState>();
@@ -125,19 +75,10 @@ class _NoTeamView extends StatelessWidget {
         ElevatedButton(
           onPressed: () async {
             if (!formKey.currentState!.validate()) return;
-            
             final navigator = Navigator.of(ctx);
-            final apiService = context.read<MockApiService>();
-            final authService = context.read<AuthService>();
-            
-            final newTeam = await apiService.createTeam(nameController.text, tagController.text, authService.currentUser!.id);
-            
-            if (newTeam != null) {
-              onActionCompleted();
-              navigator.pop();
-            } else {
-              // Gérer l'erreur
-            }
+            // CORRECTION : On appelle la méthode du State.
+            await context.read<TeamState>().createTeam(nameController.text, tagController.text);
+            navigator.pop();
           },
           child: const Text("Créer"),
         ),
@@ -162,9 +103,8 @@ class _NoTeamView extends StatelessWidget {
                 subtitle: Text(team.description),
                 onTap: () async {
                   final navigator = Navigator.of(ctx);
-                  final authService = context.read<AuthService>();
-                  await apiService.joinTeam(authService.currentUser!.id, team.id);
-                  onActionCompleted();
+                  // CORRECTION : On appelle la méthode du State.
+                  await context.read<TeamState>().joinTeam(team.id);
                   navigator.pop();
                 },
               );
@@ -194,54 +134,51 @@ class _NoTeamView extends StatelessWidget {
   }
 }
 
-
-// --- VUE QUAND L'UTILISATEUR A UNE ÉQUIPE ---
 class _TeamDetailsView extends StatelessWidget {
   final Team team;
   final List<UserProfile> members;
   final String currentUserId;
-  final VoidCallback onActionCompleted;
 
-  const _TeamDetailsView({required this.team, required this.members, required this.currentUserId, required this.onActionCompleted});
+  const _TeamDetailsView({required this.team, required this.members, required this.currentUserId}); // CORRECTION : Constructeur simple.
 
   void _showLeaveTeamDialog(BuildContext context) {
-     final isCreator = team.creatorId == currentUserId;
-     final contentText = isCreator ? "Vous êtes le créateur. Quitter transférera la propriété ou dissoudra l'équipe. Confirmer ?" : "Êtes-vous sûr de vouloir quitter cette équipe ?";
-     showDialog(context: context, builder: (ctx) => AlertDialog(
-        title: const Text("Quitter l'équipe"),
-        content: Text(contentText),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text("Annuler")),
-          TextButton(
-            child: const Text("Confirmer", style: TextStyle(color: Colors.red)),
-            onPressed: () async {
-              final navigator = Navigator.of(ctx);
-              await context.read<MockApiService>().leaveTeam(currentUserId);
-              onActionCompleted();
-              navigator.pop();
-            },
-          ),
-        ],
-     ));
+    final isCreator = team.creatorId == currentUserId;
+    final contentText = isCreator ? "Vous êtes le créateur. Quitter transférera la propriété ou dissoudra l'équipe. Confirmer ?" : "Êtes-vous sûr de vouloir quitter cette équipe ?";
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text("Quitter l'équipe"),
+      content: Text(contentText),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text("Annuler")),
+        TextButton(
+          child: const Text("Confirmer", style: TextStyle(color: Colors.red)),
+          onPressed: () async {
+            final navigator = Navigator.of(ctx);
+            // CORRECTION : On appelle la méthode du State.
+            await context.read<TeamState>().leaveTeam();
+            navigator.pop();
+          },
+        ),
+      ],
+    ));
   }
   
   void _showExcludeMemberDialog(BuildContext context, UserProfile memberToExclude) {
-     showDialog(context: context, builder: (ctx) => AlertDialog(
-        title: Text("Exclure ${memberToExclude.username}"),
-        content: const Text("Êtes-vous sûr de vouloir exclure ce membre ?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text("Annuler")),
-          TextButton(
-            child: const Text("Exclure", style: TextStyle(color: Colors.red)),
-            onPressed: () async {
-              final navigator = Navigator.of(ctx);
-              await context.read<MockApiService>().excludeMember(memberToExclude.id, team.id);
-              onActionCompleted();
-              navigator.pop();
-            },
-          ),
-        ],
-     ));
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: Text("Exclure ${memberToExclude.username}"),
+      content: const Text("Êtes-vous sûr de vouloir exclure ce membre ?"),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text("Annuler")),
+        TextButton(
+          child: const Text("Exclure", style: TextStyle(color: Colors.red)),
+          onPressed: () async {
+            final navigator = Navigator.of(ctx);
+            // CORRECTION : On appelle la méthode du State.
+            await context.read<TeamState>().excludeMember(memberToExclude.id);
+            navigator.pop();
+          },
+        ),
+      ],
+    ));
   }
 
   @override
@@ -251,7 +188,7 @@ class _TeamDetailsView extends StatelessWidget {
     final bool isCurrentUserTheCreator = currentUserId == team.creatorId;
 
     return RefreshIndicator(
-      onRefresh: () async => onActionCompleted(),
+      onRefresh: () async => context.read<TeamState>().fetchTeamDetails(team.id), // CORRECTION : Appel direct au State
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
