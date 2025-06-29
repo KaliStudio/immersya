@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _emailController.text = 'demo@immersya.com';
+    _emailController.text = 'MagicArtistes';
     _passwordController.text = 'password'; // Le mdp n'est pas vérifié dans notre mock
   }
 

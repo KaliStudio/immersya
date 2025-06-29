@@ -55,6 +55,8 @@ class MapFilterChips extends StatelessWidget {
         return 'Heatmap';
       case MapFilter.ghostTraces:
         return 'Traces';
+      case MapFilter.teammates:
+        return 'Coéquipiers';
     }
   }
 }

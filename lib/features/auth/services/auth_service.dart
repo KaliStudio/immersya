@@ -1,73 +1,89 @@
 // lib/features/auth/services/auth_service.dart
 
 import 'package:flutter/foundation.dart';
-import 'package:immersya_mobile_app/models/user_model.dart';
+import 'package:immersya_mobile_app/api/mock_api_service.dart';
 
 class AuthService with ChangeNotifier {
-  // Une liste "en mémoire" pour simuler notre base de données d'utilisateurs.
-  final List<User> _users = [];
-  
-  // L'utilisateur actuellement connecté. `_` le rend privé.
-  User? _currentUser;
+  MockApiService? _apiService;
 
-  // Un getter public pour que l'UI puisse accéder à l'utilisateur.
-  User? get currentUser => _currentUser;
-  
-  // Un getter pratique pour savoir si on est authentifié.
+  UserProfile? _currentUser;
+  UserProfile? get currentUser => _currentUser;
+
   bool get isAuthenticated => _currentUser != null;
 
-  AuthService() {
-    // On crée un utilisateur de démo au démarrage pour faciliter les tests.
-    _users.add(User(id: '1', username: 'Pathfinder_Demo', email: 'demo@immersya.com'));
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
+  String? _error;
+  String? get error => _error;
+
+  void init(MockApiService apiService) {
+    _apiService = apiService;
   }
 
-  // Simule une tentative de connexion.
-  Future<bool> login(String email, String password) async {
-    // En production, vous feriez un appel API ici.
-    // Pour notre simulation, on vérifie juste si l'email existe.
-    await Future.delayed(const Duration(seconds: 1)); // Simule une latence réseau
-    
-    try {
-      final user = _users.firstWhere((u) => u.email == email);
-      _currentUser = user;
-      //print('✅ Utilisateur connecté : ${_currentUser!.username}');
-      notifyListeners(); // Notifie tous les écouteurs que l'état a changé !
-      return true;
-    } catch (e) {
-      //print('❌ Échec de la connexion : utilisateur non trouvé.');
-      return false;
-    }
-  }
-
-  // Simule une inscription.
-  Future<bool> register(String username, String email, String password) async {
-    await Future.delayed(const Duration(seconds: 1));
-    
-    // On vérifie si l'email n'est pas déjà pris.
-    if (_users.any((u) => u.email == email)) {
-      //print('❌ Échec de l\'inscription : email déjà utilisé.');
-      return false;
-    }
-    
-    // On crée le nouvel utilisateur.
-    final newUser = User(
-      id: DateTime.now().millisecondsSinceEpoch.toString(), // ID unique simple
-      username: username,
-      email: email,
-    );
-    _users.add(newUser);
-    
-    // On connecte automatiquement l'utilisateur après l'inscription.
-    _currentUser = newUser;
-    //print('✅ Utilisateur inscrit et connecté : ${_currentUser!.username}');
+  Future<bool> login(String emailOrUsername, String password) async {
+    _isLoading = true;
+    _error = null;
     notifyListeners();
-    return true;
+
+    try {
+      final user = await _apiService!.login(emailOrUsername, password);
+      if (user == null) {
+        throw Exception("Nom d'utilisateur ou mot de passe incorrect.");
+      }
+      
+      // On récupère le profil complet (même si login le fait déjà dans notre mock)
+      _currentUser = await _apiService!.fetchUserProfile(userId: user.id);
+      
+      _isLoading = false;
+      notifyListeners();
+      return true;
+
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
   
-  // Déconnexion.
+  Future<bool> register(String email, String username, String password) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    
+    try {
+      // Dans une vraie app, l'API utiliserait ces 3 informations pour créer un nouvel utilisateur.
+      // Ici, on va simuler la création.
+      // Le MockApiService n'a pas de méthode register, on va la simuler ici.
+      // Il faudrait ajouter une logique dans le mock pour vraiment créer l'utilisateur,
+      // mais pour l'instant on se contente de logger et de connecter.
+      
+      debugPrint("Simulation d'inscription pour: $email, $username");
+
+      // Simuler une attente réseau pour l'inscription
+      await Future.delayed(const Duration(seconds: 1));
+      
+      // Après l'inscription, on connecte directement l'utilisateur.
+      // On se connecte avec le username, comme le fait notre méthode login.
+      return await login(username, password);
+
+    } catch (e) {
+      _error = "Erreur lors de l'inscription: $e";
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+  
+  Future<void> refreshCurrentUser() async {
+    if (_currentUser == null) return;
+    _currentUser = await _apiService!.fetchUserProfile(userId: _currentUser!.id);
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     _currentUser = null;
-    //print('🚪 Utilisateur déconnecté.');
     notifyListeners();
   }
 }

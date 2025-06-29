@@ -1,7 +1,7 @@
 // lib/api/mock_api_service.dart
 
+import 'dart:async'; // Ajout nécessaire pour StreamController et Timer
 import 'dart:math';
-//import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:immersya_mobile_app/features/gamification/models/badge_model.dart' as gamification_models;
 import 'package:immersya_mobile_app/models/capture_point_model.dart';
@@ -11,7 +11,7 @@ import 'package:immersya_mobile_app/models/zone_model.dart';
 import 'package:latlong2/latlong.dart';
 
 // ===================================================================
-// DÉFINITION DES MODÈLES
+// DÉFINITION DES MODÈLES (INCHANGÉ)
 // ===================================================================
 
 enum MissionPriority { low, medium, high }
@@ -24,17 +24,17 @@ class Mission {
   Mission({required this.id, required this.title, required this.description, required this.rewardPoints, required this.priority, required this.location});
 }
 
-// MODIFIÉ : UserProfile est enrichi pour les équipes
 class UserProfile {
   final String id;
   final String username, rank;
+  final String? email;
   final int immersyaPoints, scansValidated;
   final double areaCoveredKm2;
   final String? country, region, city, teamId;
-  final LatLng? lastKnownPosition;
+  LatLng? lastKnownPosition; // Modifié pour ne plus être `final`
 
   UserProfile({
-    required this.id, required this.username, required this.rank, required this.immersyaPoints,
+    required this.id, required this.username, required this.rank, this.email, required this.immersyaPoints,
     required this.areaCoveredKm2, required this.scansValidated,
     this.country, this.region, this.city, this.teamId, this.lastKnownPosition,
   });
@@ -80,27 +80,105 @@ class Contribution {
 // ===================================================================
 
 class MockApiService {
-  MockApiService(); // Constructeur public standard
+  MockApiService() {
+    // Le constructeur est un bon endroit pour initialiser des choses si nécessaire.
+  }
 
   final _random = Random();
 
-  // --- BASES DE DONNÉES FICTIVES ---
+  // --- BASES DE DONNÉES FICTIVES (INCHANGÉES) ---
   final Map<String, Team> _teams = {
     'team_alpha': Team(id: 'team_alpha', name: 'Alpha Scanners', tag: '[ALPHA]', description: 'Pionniers de la capture 3D.', bannerUrl: 'https://i.imgur.com/example_banner_1.png', creatorId: '1'),
     'team_delta': Team(id: 'team_delta', name: 'Delta Force 3D', tag: '[DELTA]', description: 'Précision et efficacité.', bannerUrl: 'https://i.imgur.com/example_banner_2.png', creatorId: '2'),
   };
 
   final Map<String, UserProfile> _userProfiles = {
+    'demo-user': UserProfile(id: 'demo-user', username: "demo_user", email: "demo@immersya.com", rank: "Testeur", immersyaPoints: 100, areaCoveredKm2: 0, scansValidated: 1, teamId: null),
     '1': UserProfile(id: '1', username: "MagicArtistes", rank: "Cartographe de Bronze", immersyaPoints: 12540, areaCoveredKm2: 2.5, scansValidated: 87, country: "France", region: "Normandie", city: "Le Havre", teamId: 'team_alpha', lastKnownPosition: const LatLng(49.49, 0.10)),
     '2': UserProfile(id: '2', username: "GeoNinja", rank: "Maître des Données", immersyaPoints: 56200, areaCoveredKm2: 12.1, scansValidated: 312, country: "Japon", region: "Kantō", city: "Tokyo", teamId: 'team_delta'),
     '3': UserProfile(id: '3', username: "PixelPioneer", rank: "Architecte Virtuel", immersyaPoints: 31050, areaCoveredKm2: 7.8, scansValidated: 154, country: "France", region: "Normandie", city: "Le Havre", teamId: 'team_alpha', lastKnownPosition: const LatLng(49.50, 0.12)),
-    '4': UserProfile(id: '4', username: "SkyScanner", rank: "Explorateur d'Argent", immersyaPoints: 21800, areaCoveredKm2: 4.2, scansValidated: 99, country: "France", region: "Auvergne-Rhône-Alpes", city: "Lyon"),
-    '5': UserProfile(id: '5', username: "NewbieMapper", rank: "Recrue", immersyaPoints: 500, areaCoveredKm2: 0.1, scansValidated: 5, country: "France", region: "Île-de-France", city: "Paris", teamId: 'team_alpha'),
+    '4': UserProfile(id: '4', username: "SkyScanner", rank: "Explorateur d'Argent", immersyaPoints: 21800, areaCoveredKm2: 4.2, scansValidated: 99, country: "France", region: "Auvergne-Rhône-Alpes", city: "Lyon", lastKnownPosition: const LatLng(45.76, 4.83)),
+    '5': UserProfile(id: '5', username: "NewbieMapper", rank: "Recrue", immersyaPoints: 500, areaCoveredKm2: 0.1, scansValidated: 5, country: "France", region: "Île-de-France", city: "Paris", teamId: 'team_alpha', lastKnownPosition: const LatLng(48.85, 2.35)),
   };
 
   final List<CaptureRecord> _captureHistory = [];
 
-  // --- NOUVELLES MÉTHODES POUR LES ÉQUIPES ET LA CARTE ---
+  Future<UserProfile?> login(String emailOrUsername, String password) async {
+    await Future.delayed(const Duration(seconds: 1));
+    try {
+      // Cherche un utilisateur dont le username OU l'email correspond.
+      return _userProfiles.values.firstWhere(
+        (user) => user.username.toLowerCase() == emailOrUsername.toLowerCase() || 
+                (user.email != null && user.email!.toLowerCase() == emailOrUsername.toLowerCase())
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ===================================================================
+  // NOUVELLE SECTION : LOGIQUE DE SIMULATION EN TEMPS RÉEL
+  // ===================================================================
+
+  // Un StreamController pour diffuser les mises à jour de profils utilisateurs (qui contiendront les nouvelles positions)
+  final _teammateLocationController = StreamController<List<UserProfile>>.broadcast();
+  Timer? _simulationTimer;
+
+  // Un getter public pour que les Providers puissent s'abonner au flux.
+  Stream<List<UserProfile>> get teammateLocationStream => _teammateLocationController.stream;
+
+  /// Démarre la simulation de mouvement pour les membres d'une équipe donnée.
+  void startTeamLocationSimulation(String teamId) {
+    // Arrête toute simulation précédente pour éviter les conflits.
+    stopTeamLocationSimulation();
+
+    final team = _teams[teamId];
+    if (team == null) {
+      debugPrint("[MockApiService] Simulation annulée : équipe $teamId non trouvée.");
+      return;
+    }
+    
+    // Récupère la liste des profils des membres de l'équipe
+    final teammates = _userProfiles.values.where((p) => p.teamId == teamId).toList();
+    
+    debugPrint("[MockApiService] Démarrage de la simulation pour l'équipe '${team.name}'.");
+
+    // Démarre un Timer qui s'exécute toutes les 3 secondes.
+    _simulationTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      for (var teammate in teammates) {
+        // On récupère la position actuelle. Si elle est nulle, on en choisit une par défaut.
+        final currentLat = teammate.lastKnownPosition?.latitude ?? 48.858;
+        final currentLng = teammate.lastKnownPosition?.longitude ?? 2.34;
+
+        // On modifie directement la propriété `lastKnownPosition` du UserProfile.
+        teammate.lastKnownPosition = LatLng(
+          currentLat + (_random.nextDouble() - 0.5) * 0.0005,
+          currentLng + (_random.nextDouble() - 0.5) * 0.0005,
+        );
+      }
+      
+      // On diffuse la liste mise à jour des profils à tous les écouteurs.
+      _teammateLocationController.add(List.from(teammates));
+    });
+  }
+
+  /// Arrête la simulation de mouvement en cours.
+  void stopTeamLocationSimulation() {
+    if (_simulationTimer?.isActive ?? false) {
+      debugPrint("[MockApiService] Arrêt de la simulation de localisation.");
+      _simulationTimer!.cancel();
+    }
+  }
+
+  /// Méthode de nettoyage à appeler pour libérer les ressources.
+  void dispose() {
+    _teammateLocationController.close();
+    stopTeamLocationSimulation();
+    debugPrint("[MockApiService] a été disposé.");
+  }
+
+
+  // --- MÉTHODES EXISTANTES (INCHANGÉES) ---
 
   Future<List<Team>> fetchAllTeams() async {
     await Future.delayed(const Duration(milliseconds: 400));
@@ -116,14 +194,15 @@ class MockApiService {
     await Future.delayed(const Duration(milliseconds: 300));
     return _userProfiles.values.where((p) => p.teamId == teamId).toList();
   }
-
+  
+  // NOTE: Cette méthode est maintenant moins utile car la simulation gère les positions,
+  // mais on la garde car elle peut servir à initialiser une position.
   Future<void> updateUserPosition(String userId, LatLng newPosition) async {
     if (_userProfiles.containsKey(userId)) {
-      _userProfiles[userId] = _userProfiles[userId]!.copyWith(lastKnownPosition: () => newPosition);
+      _userProfiles[userId]!.lastKnownPosition = newPosition;
     }
   }
 
-    // NOUVEAU : Permet à un utilisateur de rejoindre une équipe
   Future<bool> joinTeam(String userId, String teamId) async {
     await Future.delayed(const Duration(milliseconds: 100));
     if (_userProfiles.containsKey(userId) && _teams.containsKey(teamId)) {
@@ -134,50 +213,28 @@ class MockApiService {
     return false;
   }
   
-// NOUVEAU : Permet de quitter une équipe
   Future<void> leaveTeam(String userId) async {
     await Future.delayed(const Duration(milliseconds: 100));
-    
     final userProfile = _userProfiles[userId];
-    if (userProfile == null || userProfile.teamId == null) return; // L'utilisateur n'est dans aucune équipe
-
+    if (userProfile == null || userProfile.teamId == null) return;
     final teamId = userProfile.teamId!;
     final team = _teams[teamId];
-    if (team == null) return; // L'équipe n'existe pas, cas étrange
-
-    // Cas 1 : L'utilisateur qui quitte N'EST PAS le créateur
+    if (team == null) return;
     if (userId != team.creatorId) {
       _userProfiles[userId] = userProfile.copyWith(teamId: () => null);
       debugPrint("API: Le membre $userId a quitté l'équipe $teamId.");
       return;
     }
-
-    // Cas 2 : L'utilisateur qui quitte EST le créateur
     final members = _userProfiles.values.where((p) => p.teamId == teamId).toList();
-    
-    // Cas 2a : Le créateur est le dernier membre -> l'équipe est dissoute
     if (members.length <= 1) {
       _teams.remove(teamId);
       _userProfiles[userId] = userProfile.copyWith(teamId: () => null);
       debugPrint("API: Le créateur $userId a quitté l'équipe $teamId, qui a été dissoute.");
-    } 
-    // Cas 2b : Il reste d'autres membres -> on transfère la propriété
-    else {
-      // On retire le créateur actuel de la liste des candidats
+    } else {
       final otherMembers = _userProfiles.entries.where((entry) => entry.value.teamId == teamId && entry.key != userId).toList();
-      
-      // (Pour une vraie app, on prendrait le plus ancien)
-      // Ici, on prend simplement le premier autre membre de la liste.
       final newCreatorEntry = otherMembers.first;
       final newCreatorId = newCreatorEntry.key;
-
-      // On met à jour l'équipe avec le nouvel ID du créateur
-      _teams[teamId] = Team(
-        id: team.id, name: team.name, tag: team.tag, description: team.description, 
-        bannerUrl: team.bannerUrl, creatorId: newCreatorId
-      );
-
-      // On retire l'ancien créateur de l'équipe
+      _teams[teamId] = Team(id: team.id, name: team.name, tag: team.tag, description: team.description, bannerUrl: team.bannerUrl, creatorId: newCreatorId);
       _userProfiles[userId] = userProfile.copyWith(teamId: () => null);
       debugPrint("API: Le créateur $userId a quitté. La propriété de l'équipe $teamId est transférée à $newCreatorId.");
     }
@@ -186,36 +243,23 @@ class MockApiService {
   Future<Team?> createTeam(String teamName, String teamTag, String creatorId) async {
     await Future.delayed(const Duration(milliseconds: 500));
     if (_teams.values.any((team) => team.name == teamName || team.tag == teamTag)) {
-      return null; // Nom ou tag déjà pris
+      return null;
     }
     final newTeamId = 'team_${DateTime.now().millisecondsSinceEpoch}';
-    final newTeam = Team(
-      id: newTeamId,
-      name: teamName,
-      tag: '[$teamTag]',
-      description: 'Une nouvelle équipe pleine de potentiel !',
-      bannerUrl: 'https://i.imgur.com/default_banner.png',
-      creatorId: creatorId,
-    );
+    final newTeam = Team(id: newTeamId, name: teamName, tag: '[$teamTag]', description: 'Une nouvelle équipe pleine de potentiel !', bannerUrl: 'https://i.imgur.com/default_banner.png', creatorId: creatorId);
     _teams[newTeamId] = newTeam;
-    // Le créateur rejoint automatiquement son équipe
     await joinTeam(creatorId, newTeamId);
     return newTeam;
   }
 
   Future<bool> excludeMember(String memberId, String teamId) async {
     await Future.delayed(const Duration(milliseconds: 300));
-    
     final userProfile = _userProfiles[memberId];
-    // On vérifie que l'utilisateur existe et qu'il est bien dans l'équipe en question
     if (userProfile != null && userProfile.teamId == teamId) {
-      // On met son teamId à null, ce qui équivaut à une exclusion
       _userProfiles[memberId] = userProfile.copyWith(teamId: () => null);
       debugPrint("API: Le membre $memberId a été exclu de l'équipe $teamId.");
       return true;
     }
-    
-    // L'utilisateur n'était pas dans l'équipe ou n'existe pas
     debugPrint("API: Échec de l'exclusion du membre $memberId.");
     return false;
   }
@@ -274,17 +318,11 @@ class MockApiService {
     const center = LatLng(49.4922, 0.1131);
     final List<Zone> zones = [];
     const double size = 0.001;
-
     for (int i = -2; i < 3; i++) {
       for (int j = -2; j < 3; j++) {
         final zoneCenterLat = center.latitude + i * size;
         final zoneCenterLng = center.longitude + j * size;
-        final polygon = [
-          LatLng(zoneCenterLat - size / 2, zoneCenterLng - size / 2),
-          LatLng(zoneCenterLat - size / 2, zoneCenterLng + size / 2),
-          LatLng(zoneCenterLat + size / 2, zoneCenterLng + size / 2),
-          LatLng(zoneCenterLat + size / 2, zoneCenterLng - size / 2),
-        ];
+        final polygon = [ LatLng(zoneCenterLat - size / 2, zoneCenterLng - size / 2), LatLng(zoneCenterLat - size / 2, zoneCenterLng + size / 2), LatLng(zoneCenterLat + size / 2, zoneCenterLng + size / 2), LatLng(zoneCenterLat + size / 2, zoneCenterLng - size / 2), ];
         zones.add(Zone(id: 'zone_${i}_$j', coverageStatus: statuses[_random.nextInt(statuses.length)], polygon: polygon));
       }
     }
