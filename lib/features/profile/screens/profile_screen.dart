@@ -17,6 +17,37 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
+  void _showEditUsernameDialog(BuildContext context, String currentUsername) {
+    final formKey = GlobalKey<FormState>();
+    final usernameController = TextEditingController(text: currentUsername);
+
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text("Changer de nom d'utilisateur"),
+      content: Form(key: formKey, child: TextFormField(controller: usernameController, decoration: const InputDecoration(labelText: "Nouveau nom"), validator: (v) => v!.isEmpty ? "Requis" : null)),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text("Annuler")),
+        ElevatedButton(
+          onPressed: () async {
+            if (!formKey.currentState!.validate()) return;
+            
+            final navigator = Navigator.of(ctx);
+            // On appelle la méthode du ProfileState
+            final success = await context.read<ProfileState>().updateUsername(usernameController.text);
+            
+            if (success) {
+              navigator.pop();
+            } else {
+              // Gérer l'affichage de l'erreur
+              final error = context.read<ProfileState>().error;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? "Une erreur est survenue"), backgroundColor: Colors.red));
+            }
+          },
+          child: const Text("Sauvegarder"),
+        ),
+      ],
+    ));
+  }
+
 class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
@@ -84,7 +115,16 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
           child: Column(children: [
             const CircleAvatar(radius: 50, backgroundColor: Colors.blueGrey, child: Icon(Icons.person, size: 60, color: Colors.white)),
             const SizedBox(height: 16),
-            Text(profile.username, style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(profile.username, style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+                IconButton(
+                  icon: Icon(Icons.edit_outlined, size: 20, color: Colors.grey[400]),
+                  onPressed: () => _showEditUsernameDialog(context, profile.username),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             if (team != null)
               Text("${team.tag} ${team.name}", style: theme.textTheme.titleMedium?.copyWith(color: Colors.cyan))

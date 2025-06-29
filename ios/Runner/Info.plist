@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Votre position est nécessaire pour afficher la carte, les missions près de vous, et la position de vos coéquipiers.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Nous avons besoin d'accéder à votre caméra pour scanner le monde en 3D et participer aux missions de capture.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nous utilisons votre position pour afficher la carte, les missions et les coéquipiers à proximité.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>L'application peut suivre votre position en arrière-plan pour mettre à jour les zones de couverture (cette fonctionnalité peut être désactivée).</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Nous utilisons votre position pour toutes les fonctionnalités de la carte, même lorsque l'application est en arrière-plan pour la couverture des zones.</string>
 </dict>
 </plist>

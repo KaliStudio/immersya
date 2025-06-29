@@ -76,4 +76,23 @@ class ProfileState with ChangeNotifier {
       notifyListeners();
     }
   }
+
+    Future<bool> updateUsername(String newUsername) async {
+    if (_userProfile == null || _apiService == null) return false;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      await _apiService!.updateUsername(_userProfile!.id, newUsername);
+      // On rafraîchit les données via AuthService pour propager le changement partout
+      await _authService!.refreshCurrentUser();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 }

@@ -191,4 +191,36 @@ Future<void> leaveTeam() async {
       // `fetchTeamDetails` gère la fin du chargement, donc pas de `finally` ici.
     }
   }
+
+    Future<bool> updateTeamDetails(String newName, String newDescription) async {
+    if (_currentTeam == null || _apiService == null) return false;
+
+    // On pourrait ajouter une vérification pour s'assurer que l'utilisateur est le créateur
+    final isCreator = _authService?.currentUser?.id == _currentTeam!.creatorId;
+    if (!isCreator) {
+      _error = "Seul le créateur peut modifier l'équipe.";
+      notifyListeners();
+      return false;
+    }
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final updatedTeam = await _apiService!.updateTeamDetails(_currentTeam!.id, newName, newDescription);
+      if (updatedTeam != null) {
+        // On met à jour directement l'état local pour une réactivité parfaite
+        _currentTeam = updatedTeam;
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      _error = "Erreur de mise à jour: $e";
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 }

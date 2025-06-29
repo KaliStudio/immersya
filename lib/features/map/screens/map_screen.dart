@@ -6,7 +6,9 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:immersya_mobile_app/api/mock_api_service.dart';
 import 'package:immersya_mobile_app/features/capture/capture_state.dart';
+import 'package:immersya_mobile_app/features/missions/state/mission_state.dart'; // NOUVEL IMPORT
 import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart';
+import 'package:immersya_mobile_app/features/team/state/team_state.dart';
 import 'package:immersya_mobile_app/models/zone_model.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -16,7 +18,6 @@ import 'package:immersya_mobile_app/features/map/widgets/heatmap_layer.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
-
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
@@ -100,8 +101,110 @@ class _MapScreenState extends State<MapScreen> with AutomaticKeepAliveClientMixi
       case CoverageStatus.nonCouvert: return Colors.red.withAlpha(128);
     }
   }
+  
+  void _onZoneTapped(Zone zone) {
+    final teamState = context.read<TeamState>();
+    final mapState = context.read<MapState>();
+    final captureState = context.read<CaptureState>(); // On récupère CaptureState
 
-  @override
+    final bool isInTeam = teamState.currentTeam != null;
+    final bool isSessionActive = zone.sessionStatus == ZoneSessionStatus.active;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Zone ${zone.id}", style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            Text("État de la couverture : ${zone.coverageStatus.toString().split('.').last}"),
+            const SizedBox(height: 20),
+
+            // --- MODIFICATION ICI ---
+            // Bouton pour lancer un scan libre sur une zone non couverte
+            if (zone.coverageStatus == CoverageStatus.nonCouvert)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: const Text("Lancer un scan libre"),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    // On dit au CaptureState de démarrer un scan libre
+                    captureState.startFreeScan(FreeScanType.none); // On pourrait définir un type "extérieur"
+                    // On navigue vers l'écran de capture
+                    mainShellNavigatorKey.currentState?.goToTab(1);
+                  },
+                ),
+              ),
+            
+            if (isInTeam) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: Icon(isSessionActive ? Icons.stop_circle_outlined : Icons.play_circle_outline),
+                  label: Text(isSessionActive ? "Arrêter la capture d'équipe" : "Lancer une capture d'équipe"),
+                  style: ElevatedButton.styleFrom(backgroundColor: isSessionActive ? Colors.red[700] : Colors.blue[700], foregroundColor: Colors.white),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    if (isSessionActive) {
+                      mapState.stopTeamCaptureOnZone(zone.id);
+                    } else {
+                      mapState.startTeamCaptureOnZone(zone.id);
+                    }
+                  },
+                ),
+              ),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Nouvelle méthode pour le tap sur un marqueur de mission
+void _onMissionTapped(Mission mission) {
+    final missionState = context.read<MissionState>();
+    final isAccepted = missionState.isMissionAccepted(mission.id);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(mission.title, style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            Text(mission.description),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: isAccepted ? null : () {
+                  missionState.acceptMission(mission);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mission '${mission.title}' ajoutée au journal !"), backgroundColor: Colors.green));
+                },
+                child: Text(isAccepted ? "Déjà acceptée" : "Accepter la Mission"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+   @override
   Widget build(BuildContext context) {
     super.build(context);
     
@@ -111,63 +214,62 @@ class _MapScreenState extends State<MapScreen> with AutomaticKeepAliveClientMixi
       body: FutureBuilder<Position>(
         future: _initialGpsFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text("Erreur GPS : ${snapshot.error}", textAlign: TextAlign.center)));
-          }
-          if (!snapshot.hasData || _currentUserPosition == null) {
-             return const Center(child: Text("En attente du signal GPS..."));
-          }
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text("Erreur GPS : ${snapshot.error}", textAlign: TextAlign.center)));
+          if (!snapshot.hasData || _currentUserPosition == null) return const Center(child: Text("En attente du signal GPS..."));
           
           final mapState = context.watch<MapState>();
+          final captureState = context.watch<CaptureState>();
 
           return Stack(
             children: [
               FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
-                  initialCenter: _currentUserPosition!,
-                  initialZoom: 15.0,
+                  initialCenter: _currentUserPosition!, initialZoom: 15.0,
                   onTap: (tapPosition, point) {
                     if (!mapState.isFilterActive(MapFilter.zones)) return;
-                    for (final zone in mapState.zones) {
+                    for (final zone in mapState.zones.reversed) {
                       if (isPointInPolygon(point, zone.polygon)) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Zone sélectionnée : ${zone.id}')));
+                        _onZoneTapped(zone);
                         break;
                       }
                     }
                   },
                 ),
                 children: [
-                  TileLayer(
-                    urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                    subdomains: const ['a', 'b', 'c', 'd'],
-                    retinaMode: RetinaMode.isHighDensity(context), 
-                  ),
-                  if (mapState.isFilterActive(MapFilter.ghostTraces)) PolylineLayer(polylines: mapState.ghostTraces.map((trace) => Polyline(points: trace.path, color: Colors.blueAccent.withAlpha(102), strokeWidth: 3.0)).toList()),
-                  if (mapState.isFilterActive(MapFilter.zones)) PolygonLayer(polygons: mapState.zones.map((zone) { final color = _getColorForStatus(zone.coverageStatus); return Polygon(points: zone.polygon, color: color, borderColor: color.withAlpha(204), borderStrokeWidth: 1.5, isFilled: true);}).toList()),
+                  TileLayer(urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', subdomains: const ['a', 'b', 'c', 'd'], retinaMode: RetinaMode.isHighDensity(context)),
+                  if (mapState.isFilterActive(MapFilter.teamHeatmap)) HeatmapLayer(points: mapState.teamCapturePoints, controller: _mapController),
                   if (mapState.isFilterActive(MapFilter.heatmap)) HeatmapLayer(points: mapState.capturePoints, controller: _mapController),
-                  if (mapState.isFilterActive(MapFilter.missions)) MarkerLayer(markers: mapState.missions.map((mission) => Marker(width: 120, height: 80, point: mission.location, child: MissionMarker(mission: mission))).toList()),
-                  
-                  if (mapState.isFilterActive(MapFilter.teammates))
+                  if (mapState.isFilterActive(MapFilter.ghostTraces)) PolylineLayer(polylines: mapState.ghostTraces.map((trace) => Polyline(points: trace.path, color: Colors.blueAccent.withAlpha(102), strokeWidth: 3.0)).toList()),
+                  if (mapState.isFilterActive(MapFilter.zones))
+                    PolygonLayer(polygons: mapState.zones.map((zone) {
+                      final color = _getColorForStatus(zone.coverageStatus);
+                      final bool isSessionActive = zone.sessionStatus == ZoneSessionStatus.active;
+                      return Polygon(points: zone.polygon, color: color, borderStrokeWidth: isSessionActive ? 4.0 : 1.5, borderColor: isSessionActive ? Colors.white : color.withAlpha(204), isFilled: true);
+                    }).toList()),
+                  if (mapState.isFilterActive(MapFilter.missions)) 
                     MarkerLayer(
-                      markers: mapState.teammates.where((t) => t.lastKnownPosition != null).map((teammate) {
-                        return Marker(
-                          width: 80, height: 80,
-                          point: teammate.lastKnownPosition!,
-                          child: TeammateMarker(username: teammate.username),
-                        );
-                      }).toList(),
+                      markers: mapState.missions.map((mission) => Marker(
+                        width: 120, height: 80, point: mission.location,
+                        // Le GestureDetector est la clé pour le `onTap` sur un Marker
+                        child: GestureDetector(
+                          onTap: () => _onMissionTapped(mission),
+                          child: MissionMarkerWidget(mission: mission), // Utilise VOTRE widget
+                        )
+                      )).toList()
                     ),
-
+                  if (captureState.isCapturing && _currentUserPosition != null) CircleLayer(circles: [ CircleMarker(point: _currentUserPosition!, radius: 25, useRadiusInMeter: true, color: Colors.cyan.withAlpha(25), borderColor: Colors.cyan.withAlpha(128), borderStrokeWidth: 2) ]),
+                  if (mapState.isFilterActive(MapFilter.teammates))
+                    CircleLayer(circles: mapState.teammates.where((t) => t.isCapturing && t.lastKnownPosition != null).map((teammate) => CircleMarker(point: teammate.lastKnownPosition!, radius: teammate.captureRadius, useRadiusInMeter: true, color: Colors.redAccent.withAlpha(51), borderColor: Colors.redAccent.withAlpha(153), borderStrokeWidth: 2)).toList()),
+                  if (mapState.isFilterActive(MapFilter.teammates))
+                    MarkerLayer(markers: mapState.teammates.where((t) => t.lastKnownPosition != null).map((teammate) => Marker(width: 80, height: 80, point: teammate.lastKnownPosition!, child: TeammateMarker(user: teammate))).toList()),
                   if (_currentUserPosition != null && mapState.isFilterActive(MapFilter.currentUser))
                     MarkerLayer(markers: [Marker(width: 80.0, height: 80.0, point: _currentUserPosition!, child: const PlayerMarker())]),
                 ],
               ),
               const MapFilterChips(),
-              if (mapState.isLoading) Container(color: Colors.black.withOpacity(0.3), child: const Center(child: CircularProgressIndicator())),
+              if (mapState.isLoading) Container(color: Colors.black.withAlpha(77), child: const Center(child: CircularProgressIndicator())),
             ],
           );
         },
@@ -176,34 +278,34 @@ class _MapScreenState extends State<MapScreen> with AutomaticKeepAliveClientMixi
   }
 }
 
-// =============================================================
-// WIDGETS DE MARQUEURS (INCHANGÉS)
-// =============================================================
-
 class TeammateMarker extends StatelessWidget {
-  final String username;
-  const TeammateMarker({super.key, required this.username});
+  final UserProfile user;
+  const TeammateMarker({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {
+    final bool isCapturing = user.isCapturing;
+    final Color color = isCapturing ? Colors.redAccent : Colors.greenAccent;
+    final IconData icon = isCapturing ? Icons.camera : Icons.person_pin_circle;
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(8)),
-          child: Text(username, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+          decoration: BoxDecoration(color: Colors.black.withAlpha(153), borderRadius: BorderRadius.circular(8)),
+          child: Text(user.username, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
         ),
         const SizedBox(height: 2),
-        const Icon(Icons.person_pin_circle, color: Colors.greenAccent, size: 30),
+        Icon(icon, color: color, size: 30),
       ],
     );
   }
 }
 
-class MissionMarker extends StatelessWidget {
+class MissionMarkerWidget  extends StatelessWidget {
   final Mission mission;
-  const MissionMarker({super.key, required this.mission});
+  const MissionMarkerWidget ({super.key, required this.mission});
 
   @override
   Widget build(BuildContext context) {
@@ -254,6 +356,8 @@ class _PlayerMarkerState extends State<PlayerMarker> with SingleTickerProviderSt
     _animationController.dispose();
     super.dispose();
   }
+
+
 
   @override
   Widget build(BuildContext context) {

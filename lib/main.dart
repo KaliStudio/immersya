@@ -2,8 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-// VOS IMPORTS EXISTANTS
 import 'package:immersya_mobile_app/api/mock_api_service.dart';
 import 'package:immersya_mobile_app/app.dart';
 import 'package:immersya_mobile_app/features/capture/capture_state.dart';
@@ -11,6 +9,9 @@ import 'package:immersya_mobile_app/features/map/state/map_state.dart';
 import 'package:immersya_mobile_app/features/auth/services/auth_service.dart';
 import 'package:immersya_mobile_app/features/profile/state/profile_state.dart';
 import 'package:immersya_mobile_app/features/team/state/team_state.dart';
+import 'package:immersya_mobile_app/features/permissions/permission_service.dart';
+import 'package:immersya_mobile_app/features/missions/state/mission_state.dart'; 
+
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +29,10 @@ void main() {
           ),
         ),
         ChangeNotifierProvider<CaptureState>(
-          create: (_) => CaptureState(),
+          create: (context) => CaptureState()..init(
+            Provider.of<MockApiService>(context, listen: false),
+            Provider.of<AuthService>(context, listen: false)
+          ),
         ),
         ChangeNotifierProvider<ProfileState>(
           create: (context) => ProfileState()..init(
@@ -49,6 +53,14 @@ void main() {
             Provider.of<MockApiService>(context, listen: false),
             Provider.of<AuthService>(context, listen: false),
             Provider.of<TeamState>(context, listen: false), // On lui passe sa dépendance.
+          ),
+        ),
+        ChangeNotifierProvider<PermissionService>(
+          create: (_) => PermissionService(),
+        ),
+        ChangeNotifierProvider<MissionState>(
+          create: (context) => MissionState(
+            Provider.of<MockApiService>(context, listen: false),
           ),
         ),
       ],

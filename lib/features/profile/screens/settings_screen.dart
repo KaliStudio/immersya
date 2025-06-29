@@ -1,9 +1,13 @@
 // lib/features/profile/screens/settings_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // --- AJOUT : Pour accéder à AuthService ---
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:immersya_mobile_app/features/auth/services/auth_service.dart'; // --- AJOUT : Pour importer AuthService ---
+import 'package:immersya_mobile_app/features/auth/services/auth_service.dart';
+
+// --- AJOUTS POUR LA GESTION DES PERMISSIONS ---
+import 'package:immersya_mobile_app/features/permissions/permission_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -25,6 +29,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
+    // Rafraîchit l'état actuel des permissions au cas où l'utilisateur
+    // viendrait des réglages de son téléphone.
+    if (mounted) {
+      context.read<PermissionService>().checkAllPermissions();
+    }
+    
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
@@ -56,15 +66,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          return _buildSettingsList();
+          // On écoute le service de permission pour reconstruire si le statut change
+          final permissionService = context.watch<PermissionService>();
+          return _buildSettingsList(permissionService);
         },
       ),
     );
   }
 
-  ListView _buildSettingsList() {
+  ListView _buildSettingsList(PermissionService permissionService) {
     return ListView(
       children: [
+        // --- NOUVELLE SECTION : PERMISSIONS ---
+        _buildSectionTitle(context, 'Permissions de l\'application'),
+        _buildPermissionTile(
+          context,
+          permissionService,
+          title: "Appareil photo",
+          subtitle: "Nécessaire pour toutes les fonctionnalités de scan.",
+          status: permissionService.cameraStatus,
+          onRequest: () => permissionService.requestCameraPermission(),
+        ),
+        _buildPermissionTile(
+          context,
+          permissionService,
+          title: "Localisation",
+          subtitle: "Nécessaire pour la carte et les missions.",
+          status: permissionService.locationStatus,
+          onRequest: () => permissionService.requestLocationPermission(),
+        ),
+        const Divider(),
+        
+        // --- VOS SECTIONS EXISTANTES (INCHANGÉES) ---
         _buildSectionTitle(context, 'Capture'),
         SwitchListTile(
           title: const Text('Activer le Scan LiDAR'),
@@ -122,6 +155,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // --- NOUVEAU WIDGET HELPER POUR LES PERMISSIONS ---
+  Widget _buildPermissionTile(
+    BuildContext context,
+    PermissionService service, {
+    required String title,
+    required String subtitle,
+    required PermissionStatus status,
+    required VoidCallback onRequest,
+  }) {
+    String statusText;
+    Color statusColor;
+    Widget? trailing;
+
+    switch (status) {
+      case PermissionStatus.granted:
+        statusText = "Autorisé";
+        statusColor = Colors.green;
+        trailing = const Icon(Icons.check_circle, color: Colors.green);
+        break;
+      case PermissionStatus.denied:
+        statusText = "Non demandé";
+        statusColor = Colors.orange;
+        trailing = ElevatedButton(onPressed: onRequest, child: const Text("Demander"));
+        break;
+      case PermissionStatus.permanentlyDenied:
+      case PermissionStatus.restricted:
+        statusText = "Bloqué";
+        statusColor = Colors.red;
+        trailing = ElevatedButton(onPressed: () => service.openAppSettings(), child: const Text("Réglages"));
+        break;
+      default:
+        statusText = "Inconnu";
+        statusColor = Colors.grey;
+    }
+
+    return ListTile(
+      title: Text(title),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(subtitle),
+          const SizedBox(height: 4),
+          Text('Statut : $statusText', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold)),
+        ],
+      ),
+      trailing: trailing,
+    );
+  }
+
+  // --- VOS MÉTHODES EXISTANTES (INCHANGÉES) ---
   Padding _buildSectionTitle(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
@@ -145,25 +228,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           actions: <Widget>[
             TextButton(
               child: const Text('Annuler'),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(),
             ),
             TextButton(
               child: const Text('Confirmer', style: TextStyle(color: Colors.red)),
-              // --- MODIFICATION : On connecte le bouton à AuthService ---
               onPressed: () {
-                // 1. On ferme la boîte de dialogue
                 Navigator.of(dialogContext).pop();
-                
-                // 2. On accède à AuthService via le contexte principal (celui du Scaffold)
-                //    et on appelle la méthode de déconnexion.
-                //    On utilise `context.read` car on est dans un callback.
                 context.read<AuthService>().logout();
-
-                // 3. (Optionnel) Si l'écran des paramètres n'est pas la racine de la navigation
-                //    après la déconnexion, on peut le fermer aussi pour éviter qu'un utilisateur
-                //    puisse revenir dessus avec le bouton "retour".
                 if (Navigator.of(context).canPop()) {
                     Navigator.of(context).pop();
                 }

@@ -31,18 +31,24 @@ class UserProfile {
   final int immersyaPoints, scansValidated;
   final double areaCoveredKm2;
   final String? country, region, city, teamId;
-  LatLng? lastKnownPosition; // Modifié pour ne plus être `final`
+  LatLng? lastKnownPosition;
+  bool isCapturing;
+  double captureRadius;
 
   UserProfile({
     required this.id, required this.username, required this.rank, this.email, required this.immersyaPoints,
     required this.areaCoveredKm2, required this.scansValidated,
     this.country, this.region, this.city, this.teamId, this.lastKnownPosition,
+    this.isCapturing = false,
+    this.captureRadius = 25.0,
   });
 
   UserProfile copyWith({
     String? id, String? username, String? rank, int? immersyaPoints, double? areaCoveredKm2,
     int? scansValidated, String? country, String? region, String? city,
     ValueGetter<String?>? teamId, ValueGetter<LatLng?>? lastKnownPosition,
+    bool? isCapturing,
+    double? captureRadius,
   }) => UserProfile(
       id: id ?? this.id,
       username: username ?? this.username, rank: rank ?? this.rank,
@@ -52,6 +58,8 @@ class UserProfile {
       country: country ?? this.country, region: region ?? this.region, city: city ?? this.city,
       teamId: teamId != null ? teamId() : this.teamId,
       lastKnownPosition: lastKnownPosition != null ? lastKnownPosition() : this.lastKnownPosition,
+      isCapturing: isCapturing ?? this.isCapturing,
+      captureRadius: captureRadius ?? this.captureRadius,
   );
 }
 
@@ -87,11 +95,10 @@ class MockApiService {
   final _random = Random();
 
   // --- BASES DE DONNÉES FICTIVES (INCHANGÉES) ---
-  final Map<String, Team> _teams = {
+   final Map<String, Team> _teams = {
     'team_alpha': Team(id: 'team_alpha', name: 'Alpha Scanners', tag: '[ALPHA]', description: 'Pionniers de la capture 3D.', bannerUrl: 'https://i.imgur.com/example_banner_1.png', creatorId: '1'),
     'team_delta': Team(id: 'team_delta', name: 'Delta Force 3D', tag: '[DELTA]', description: 'Précision et efficacité.', bannerUrl: 'https://i.imgur.com/example_banner_2.png', creatorId: '2'),
   };
-
   final Map<String, UserProfile> _userProfiles = {
     'demo-user': UserProfile(id: 'demo-user', username: "demo_user", email: "demo@immersya.com", rank: "Testeur", immersyaPoints: 100, areaCoveredKm2: 0, scansValidated: 1, teamId: null),
     '1': UserProfile(id: '1', username: "MagicArtistes", rank: "Cartographe de Bronze", immersyaPoints: 12540, areaCoveredKm2: 2.5, scansValidated: 87, country: "France", region: "Normandie", city: "Le Havre", teamId: 'team_alpha', lastKnownPosition: const LatLng(49.49, 0.10)),
@@ -100,8 +107,23 @@ class MockApiService {
     '4': UserProfile(id: '4', username: "SkyScanner", rank: "Explorateur d'Argent", immersyaPoints: 21800, areaCoveredKm2: 4.2, scansValidated: 99, country: "France", region: "Auvergne-Rhône-Alpes", city: "Lyon", lastKnownPosition: const LatLng(45.76, 4.83)),
     '5': UserProfile(id: '5', username: "NewbieMapper", rank: "Recrue", immersyaPoints: 500, areaCoveredKm2: 0.1, scansValidated: 5, country: "France", region: "Île-de-France", city: "Paris", teamId: 'team_alpha', lastKnownPosition: const LatLng(48.85, 2.35)),
   };
+  final List<CaptureRecord> _captureHistory = [
+    CaptureRecord(userId: '1', location: const LatLng(49.491, 0.105), timestamp: DateTime.now()),
+    CaptureRecord(userId: '1', location: const LatLng(49.492, 0.106), timestamp: DateTime.now()),
+    CaptureRecord(userId: '3', location: const LatLng(49.501, 0.121), timestamp: DateTime.now()),
+    CaptureRecord(userId: '3', location: const LatLng(49.502, 0.122), timestamp: DateTime.now()),
+    CaptureRecord(userId: '2', location: const LatLng(48.861, 2.338), timestamp: DateTime.now()),
+  ];
 
-  final List<CaptureRecord> _captureHistory = [];
+  List<Zone>? _zonesCache;
+
+  Future<List<CaptureRecord>> fetchTeamCaptureHistory(String teamId) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final team = _teams[teamId];
+    if (team == null) return [];
+    final memberIds = _userProfiles.values.where((p) => p.teamId == teamId).map((p) => p.id).toSet();
+    return _captureHistory.where((record) => memberIds.contains(record.userId)).toList();
+  }
 
   Future<UserProfile?> login(String emailOrUsername, String password) async {
     await Future.delayed(const Duration(seconds: 1));
@@ -313,6 +335,7 @@ class MockApiService {
   }
 
   Future<List<Zone>> fetchZones() async {
+    if (_zonesCache != null) return _zonesCache!;
     await Future.delayed(const Duration(milliseconds: 500));
     final statuses = [CoverageStatus.modele, CoverageStatus.partiel, CoverageStatus.enCours, CoverageStatus.nonCouvert];
     const center = LatLng(49.4922, 0.1131);
@@ -326,7 +349,30 @@ class MockApiService {
         zones.add(Zone(id: 'zone_${i}_$j', coverageStatus: statuses[_random.nextInt(statuses.length)], polygon: polygon));
       }
     }
+    _zonesCache = zones;
     return zones;
+  }
+
+   // NOUVELLES MÉTHODES POUR LES SESSIONS
+  Future<void> startTeamCaptureOnZone(String zoneId) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    final zones = await fetchZones(); // S'assure que le cache est peuplé
+    final zoneIndex = zones.indexWhere((z) => z.id == zoneId);
+    if (zoneIndex != -1) {
+      // On met à jour l'état de la zone
+      zones[zoneIndex].sessionStatus = ZoneSessionStatus.active;
+      debugPrint("API: Session de capture démarrée sur la zone $zoneId");
+    }
+  }
+
+  Future<void> stopTeamCaptureOnZone(String zoneId) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    final zones = await fetchZones();
+    final zoneIndex = zones.indexWhere((z) => z.id == zoneId);
+    if (zoneIndex != -1) {
+      zones[zoneIndex].sessionStatus = ZoneSessionStatus.none;
+      debugPrint("API: Session de capture arrêtée sur la zone $zoneId");
+    }
   }
 
   Future<List<Mission>> fetchMissions() async {
@@ -399,5 +445,46 @@ class MockApiService {
       path.add(LatLng(lat, lng));
     }
     return GhostTrace(id: id, path: path);
+  }
+
+  Future<void> updateCaptureStatus(String userId, bool isCapturing) async {
+    if (_userProfiles.containsKey(userId)) {
+      // On met à jour le profil de l'utilisateur directement.
+      _userProfiles[userId] = _userProfiles[userId]!.copyWith(isCapturing: isCapturing);
+      debugPrint("API: Statut de capture de $userId mis à jour à : $isCapturing");
+    }
+  }
+
+  Future<Team?> updateTeamDetails(String teamId, String newName, String newDescription) async {
+    if (!_teams.containsKey(teamId)) return null;
+
+    final oldTeam = _teams[teamId]!;
+    // On crée une nouvelle instance car notre modèle est immuable
+    final updatedTeam = Team(
+      id: oldTeam.id,
+      name: newName,
+      tag: oldTeam.tag, // On ne modifie pas le tag pour l'instant
+      description: newDescription,
+      bannerUrl: oldTeam.bannerUrl,
+      creatorId: oldTeam.creatorId,
+    );
+
+    _teams[teamId] = updatedTeam;
+    debugPrint("API: L'équipe $teamId a été mise à jour.");
+    return updatedTeam;
+  }
+
+   Future<UserProfile?> updateUsername(String userId, String newUsername) async {
+    // On pourrait vérifier si le nom est déjà pris
+    if (_userProfiles.values.any((p) => p.username == newUsername)) {
+      throw Exception("Ce nom d'utilisateur est déjà pris.");
+    }
+
+    if (_userProfiles.containsKey(userId)) {
+      _userProfiles[userId] = _userProfiles[userId]!.copyWith(username: newUsername);
+      debugPrint("API: Username de $userId mis à jour à : $newUsername");
+      return _userProfiles[userId];
+    }
+    return null;
   }
 }

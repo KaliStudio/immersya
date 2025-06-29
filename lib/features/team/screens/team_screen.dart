@@ -20,15 +20,15 @@ class TeamScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Mon Équipe'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              if (teamState.currentTeam != null) {
-                // On utilise context.read pour appeler une méthode.
+          // On n'affiche le bouton refresh que si on est dans une équipe
+          if (teamState.currentTeam != null)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: "Rafraîchir",
+              onPressed: () {
                 context.read<TeamState>().fetchTeamDetails(teamState.currentTeam!.id);
-              }
-            },
-          ),
+              },
+            ),
         ],
       ),
       body: Builder(
@@ -43,21 +43,24 @@ class TeamScreen extends StatelessWidget {
             return const Center(child: Text("Veuillez vous connecter."));
           }
           if (teamState.currentTeam == null) {
-            return const _NoTeamView(); // CORRECTION : Plus besoin de passer de callback.
+            return const _NoTeamView();
           }
           return _TeamDetailsView(
             team: teamState.currentTeam!,
             members: teamState.members,
             currentUserId: currentUserId,
-          ); // CORRECTION : Plus besoin de passer de callback.
+          );
         },
       ),
     );
   }
 }
 
+// =============================================================
+// WIDGET QUAND L'UTILISATEUR N'A PAS D'ÉQUIPE
+// =============================================================
 class _NoTeamView extends StatelessWidget {
-  const _NoTeamView(); // CORRECTION : Constructeur simple.
+  const _NoTeamView();
 
   void _showCreateTeamDialog(BuildContext context) {
     final formKey = GlobalKey<FormState>();
@@ -76,7 +79,6 @@ class _NoTeamView extends StatelessWidget {
           onPressed: () async {
             if (!formKey.currentState!.validate()) return;
             final navigator = Navigator.of(ctx);
-            // CORRECTION : On appelle la méthode du State.
             await context.read<TeamState>().createTeam(nameController.text, tagController.text);
             navigator.pop();
           },
@@ -103,7 +105,6 @@ class _NoTeamView extends StatelessWidget {
                 subtitle: Text(team.description),
                 onTap: () async {
                   final navigator = Navigator.of(ctx);
-                  // CORRECTION : On appelle la méthode du State.
                   await context.read<TeamState>().joinTeam(team.id);
                   navigator.pop();
                 },
@@ -134,12 +135,16 @@ class _NoTeamView extends StatelessWidget {
   }
 }
 
+
+// =============================================================
+// VUE QUAND L'UTILISATEUR A UNE ÉQUIPE
+// =============================================================
 class _TeamDetailsView extends StatelessWidget {
   final Team team;
   final List<UserProfile> members;
   final String currentUserId;
 
-  const _TeamDetailsView({required this.team, required this.members, required this.currentUserId}); // CORRECTION : Constructeur simple.
+  const _TeamDetailsView({required this.team, required this.members, required this.currentUserId});
 
   void _showLeaveTeamDialog(BuildContext context) {
     final isCreator = team.creatorId == currentUserId;
@@ -153,9 +158,8 @@ class _TeamDetailsView extends StatelessWidget {
           child: const Text("Confirmer", style: TextStyle(color: Colors.red)),
           onPressed: () async {
             final navigator = Navigator.of(ctx);
-            // CORRECTION : On appelle la méthode du State.
             await context.read<TeamState>().leaveTeam();
-            navigator.pop();
+            if (navigator.mounted) navigator.pop();
           },
         ),
       ],
@@ -172,10 +176,38 @@ class _TeamDetailsView extends StatelessWidget {
           child: const Text("Exclure", style: TextStyle(color: Colors.red)),
           onPressed: () async {
             final navigator = Navigator.of(ctx);
-            // CORRECTION : On appelle la méthode du State.
             await context.read<TeamState>().excludeMember(memberToExclude.id);
-            navigator.pop();
+            if (navigator.mounted) navigator.pop();
           },
+        ),
+      ],
+    ));
+  }
+
+  // NOUVELLE MÉTHODE POUR L'ÉDITION
+  void _showEditTeamDialog(BuildContext context, Team team) {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: team.name);
+    final descriptionController = TextEditingController(text: team.description);
+
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text("Modifier l'équipe"),
+      content: Form(key: formKey, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextFormField(controller: nameController, decoration: const InputDecoration(labelText: "Nom de l'équipe"), validator: (v) => v!.isEmpty ? "Requis" : null),
+        TextFormField(controller: descriptionController, decoration: const InputDecoration(labelText: "Description"), maxLines: 3, validator: (v) => v!.isEmpty ? "Requis" : null),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text("Annuler")),
+        ElevatedButton(
+          onPressed: () async {
+            if (!formKey.currentState!.validate()) return;
+            final navigator = Navigator.of(ctx);
+            final success = await context.read<TeamState>().updateTeamDetails(nameController.text, descriptionController.text);
+            if (success && navigator.mounted) {
+              navigator.pop();
+            }
+          },
+          child: const Text("Sauvegarder"),
         ),
       ],
     ));
@@ -188,13 +220,16 @@ class _TeamDetailsView extends StatelessWidget {
     final bool isCurrentUserTheCreator = currentUserId == team.creatorId;
 
     return RefreshIndicator(
-      onRefresh: () async => context.read<TeamState>().fetchTeamDetails(team.id), // CORRECTION : Appel direct au State
+      onRefresh: () async => context.read<TeamState>().fetchTeamDetails(team.id),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           Stack(children: [
             Container(height: 150, color: Colors.grey[800], child: Center(child: Text(team.name, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)))),
             Positioned(top: 8, right: 8, child: IconButton(icon: const Icon(Icons.exit_to_app, color: Colors.white), tooltip: "Quitter l'équipe", onPressed: () => _showLeaveTeamDialog(context))),
+            // AJOUT DU BOUTON MODIFIER
+            if (isCurrentUserTheCreator)
+              Positioned(top: 8, left: 8, child: IconButton(icon: const Icon(Icons.edit, color: Colors.white), tooltip: "Modifier l'équipe", onPressed: () => _showEditTeamDialog(context, team))),
           ]),
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -218,18 +253,12 @@ class _TeamDetailsView extends StatelessWidget {
                   final member = members[index];
                   final bool isThisMemberTheCreator = member.id == team.creatorId;
                   final bool isThisMemberTheCurrentUser = member.id == currentUserId;
-                  
                   Widget? trailingWidget;
                   if (isCurrentUserTheCreator && !isThisMemberTheCurrentUser) {
-                    trailingWidget = IconButton(
-                      icon: const Icon(Icons.person_remove_outlined, color: Colors.redAccent),
-                      tooltip: "Exclure le membre",
-                      onPressed: () => _showExcludeMemberDialog(context, member),
-                    );
+                    trailingWidget = IconButton(icon: const Icon(Icons.person_remove_outlined, color: Colors.redAccent), tooltip: "Exclure le membre", onPressed: () => _showExcludeMemberDialog(context, member));
                   } else {
                     trailingWidget = Text('${member.immersyaPoints} pts');
                   }
-      
                   return ListTile(
                     leading: CircleAvatar(child: Icon(isThisMemberTheCreator ? Icons.workspace_premium_outlined : Icons.person_outline)),
                     title: Text(member.username, style: isThisMemberTheCurrentUser ? const TextStyle(fontWeight: FontWeight.bold, color: Colors.cyan) : null),
