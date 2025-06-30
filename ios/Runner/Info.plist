@@ -35,6 +35,8 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Votre position est nécessaire pour afficher la carte, les missions près de vous, et la position de vos coéquipiers.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<key>NSMicrophoneUsageDescription</key>
+<string>Nous avons besoin du micro pour enregistrer le son.</string>
 	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

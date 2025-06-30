@@ -1,12 +1,12 @@
 // lib/features/capture/screens/capture_screen.dart
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-// --- AJOUTS : Imports nécessaires pour la localisation ---
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-// ---
 import 'package:immersya_mobile_app/features/capture/capture_state.dart';
 import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart';
+import 'package:immersya_mobile_app/features/permissions/permission_service.dart'; // NOUVEL IMPORT
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
@@ -25,25 +25,27 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
   @override
   void initState() {
     super.initState();
-    _initializeControllerFuture = _initializeCamera();
-  }
-
-  Future<void> _initializeCamera() async {
-    final cameraStatus = await Permission.camera.request();
-    if (cameraStatus.isGranted) {
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) throw Exception("Aucune caméra disponible.");
-      
-      final firstCamera = cameras.first;
-      _cameraController = CameraController(
-        firstCamera, 
-        ResolutionPreset.high, 
-        enableAudio: false, // Désactiver l'audio est une bonne pratique si non utilisé
-      );
-      return _cameraController!.initialize();
-    } else {
-      throw Exception("Permissions caméra refusées.");
+    // On lance l'initialisation uniquement si la permission est déjà accordée.
+    // L'UI gérera la demande.
+    final permissionService = context.read<PermissionService>();
+    if (permissionService.cameraStatus.isGranted) {
+      _initializeControllerFuture = _initializeCamera();
     }
+  }
+  
+  // Cette méthode ne demande PLUS la permission. Elle suppose qu'elle est accordée.
+  Future<void> _initializeCamera() async {
+    final cameras = await availableCameras();
+    if (cameras.isEmpty) throw Exception("Aucune caméra disponible.");
+    
+    _cameraController?.dispose(); // Sécurité pour éviter les fuites
+    final firstCamera = cameras.first;
+    _cameraController = CameraController(
+      firstCamera, 
+      ResolutionPreset.high, 
+      enableAudio: false,
+    );
+    return _cameraController!.initialize();
   }
   
   @override
@@ -58,8 +60,20 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Consumer<CaptureState>(
-      builder: (context, captureState, child) {
+    return Consumer2<CaptureState, PermissionService>(
+      builder: (context, captureState, permissionService, child) {
+        // --- NOUVELLE LOGIQUE DE PERMISSION ---
+        // Si la permission caméra n'est pas accordée, on affiche un écran dédié.
+        if (!permissionService.cameraStatus.isGranted) {
+          return _buildPermissionRequestView(permissionService);
+        }
+        
+        // Si la permission vient d'être accordée, on doit lancer l'initialisation.
+        if (_cameraController == null || !_cameraController!.value.isInitialized) {
+          _initializeControllerFuture ??= _initializeCamera();
+        }
+
+        // Le reste de votre logique est maintenant correcte.
         if (captureState.isUploading) {
           return _buildUploadProgressView(captureState);
         } 
@@ -71,6 +85,40 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
             return _buildIdleSelectionView();
         } 
       },
+    );
+  }
+
+  // NOUVEAU WIDGET pour demander la permission.
+  Widget _buildPermissionRequestView(PermissionService permissionService) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Permission Requise')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.no_photography_outlined, size: 80, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text("Accès à la caméra requis", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              const Text("Pour scanner le monde en 3D, Immersya a besoin d'accéder à votre appareil photo.", textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => permissionService.requestCameraPermission(),
+                child: const Text("Autoriser l'accès"),
+              ),
+              if (permissionService.cameraStatus.isPermanentlyDenied) ...[
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => permissionService.openDeviceSettings(),
+                  child: const Text("Ouvrir les réglages", style: TextStyle(decoration: TextDecoration.underline)),
+                ),
+              ]
+            ],
+          ),
+        ),
+      ),
     );
   }
 

@@ -11,7 +11,6 @@ class PermissionService with ChangeNotifier {
   PermissionStatus get locationStatus => _locationStatus;
 
   PermissionService() {
-    // Vérifie le statut des permissions au démarrage.
     checkAllPermissions();
   }
 
@@ -22,43 +21,43 @@ class PermissionService with ChangeNotifier {
   }
 
   Future<void> requestCameraPermission() async {
-    // Si la permission est déjà bloquée, on ouvre directement les paramètres.
     if (await Permission.camera.isPermanentlyDenied) {
+      // Si c'est bloqué, on ouvre les paramètres
       await openAppSettings();
-      return;
+    } else {
+      // Sinon, on demande la permission
+      _cameraStatus = await Permission.camera.request();
     }
-    _cameraStatus = await Permission.camera.request();
-    notifyListeners();
+    // On revérifie le statut final après l'action de l'utilisateur
+    await checkAllPermissions();
   }
 
   Future<void> requestLocationPermission() async {
-    // Si la permission est déjà bloquée, on ouvre directement les paramètres.
     if (await Permission.location.isPermanentlyDenied) {
       await openAppSettings();
-      return;
+    } else {
+      _locationStatus = await Permission.location.request();
     }
-    _locationStatus = await Permission.location.request();
-    notifyListeners();
+    await checkAllPermissions();
   }
 
-  // Ouvre les paramètres de l'application pour que l'utilisateur puisse changer les permissions manuellement.
-  Future<void> openAppSettings() async {
+  // CORRECTION : La méthode openAppSettings() du service ne doit pas s'appeler elle-même.
+  // Elle doit appeler la fonction du package permission_handler.
+  Future<void> openDeviceSettings() async {
     await openAppSettings();
   }
 
-    Future<bool> requestEssentialPermissions() async {
-    // On demande les permissions en parallèle.
+  // Votre méthode requestEssentialPermissions est bonne, on la garde.
+  Future<bool> requestEssentialPermissions() async {
     Map<Permission, PermissionStatus> statuses = await [
       Permission.camera,
       Permission.location,
     ].request();
 
-    // On met à jour nos statuts internes.
     _cameraStatus = statuses[Permission.camera] ?? PermissionStatus.denied;
     _locationStatus = statuses[Permission.location] ?? PermissionStatus.denied;
     notifyListeners();
 
-    // On vérifie si tout est bien accordé.
     return _cameraStatus.isGranted && _locationStatus.isGranted;
   }
 }
