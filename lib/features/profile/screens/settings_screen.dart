@@ -168,26 +168,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Color statusColor;
     Widget? trailing;
 
-    switch (status) {
-      case PermissionStatus.granted:
-        statusText = "Autorisé";
-        statusColor = Colors.green;
-        trailing = const Icon(Icons.check_circle, color: Colors.green);
-        break;
-      case PermissionStatus.denied:
-        statusText = "Non demandé";
-        statusColor = Colors.orange;
-        trailing = ElevatedButton(onPressed: onRequest, child: const Text("Demander"));
-        break;
-      case PermissionStatus.permanentlyDenied:
-      case PermissionStatus.restricted:
-        statusText = "Bloqué";
-        statusColor = Colors.red;
-        trailing = ElevatedButton(onPressed: () => service.openAppSettings(), child: const Text("Réglages"));
-        break;
-      default:
-        statusText = "Inconnu";
-        statusColor = Colors.grey;
+    if (status.isGranted) {
+      statusText = "Autorisé";
+      statusColor = Colors.green;
+      trailing = const Icon(Icons.check_circle, color: Colors.green);
+    } else if (status.isPermanentlyDenied) {
+      statusText = "Bloqué";
+      statusColor = Colors.red;
+      trailing = ElevatedButton(onPressed: onRequest, child: const Text("Réglages"));
+    } else { // isDenied, isRestricted, etc.
+      statusText = "Refusé";
+      statusColor = Colors.orange;
+      trailing = ElevatedButton(onPressed: onRequest, child: const Text("Demander"));
     }
 
     return ListTile(
