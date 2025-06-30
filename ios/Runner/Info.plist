@@ -26,6 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>io.flutter.embedded_views_preview</key>
+	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Nous avons besoin d'accéder à vos photos pour enregistrer ou récupérer des captures.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Nous avons besoin d'enregistrer des images dans votre galerie après une capture.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Nous avons besoin d'accéder à votre caméra pour scanner le monde en 3D et participer aux missions de capture.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -36,7 +42,7 @@
 	<string>Votre position est nécessaire pour afficher la carte, les missions près de vous, et la position de vos coéquipiers.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<key>NSMicrophoneUsageDescription</key>
-<string>Nous avons besoin du micro pour enregistrer le son.</string>
+	<string>Nous avons besoin du micro pour enregistrer le son.</string>
 	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

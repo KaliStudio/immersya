@@ -1,12 +1,10 @@
-// lib/features/capture/screens/capture_screen.dart
-
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:immersya_mobile_app/features/capture/capture_state.dart';
 import 'package:immersya_mobile_app/features/shell/screens/main_shell.dart';
-import 'package:immersya_mobile_app/features/permissions/permission_service.dart'; // NOUVEL IMPORT
+import 'package:immersya_mobile_app/features/permissions/permission_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
@@ -17,7 +15,7 @@ class CaptureScreen extends StatefulWidget {
   State<CaptureScreen> createState() => _CaptureScreenState();
 }
 
-class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveClientMixin {
+class _CaptureScreenState extends State<CaptureScreen> with AutomaticKeepAliveClientMixin {
   CameraController? _cameraController;
   Future<void>? _initializeControllerFuture;
   int _photoCount = 0;
@@ -25,29 +23,24 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
   @override
   void initState() {
     super.initState();
-    // On lance l'initialisation uniquement si la permission est déjà accordée.
-    // L'UI gérera la demande.
-    final permissionService = context.read<PermissionService>();
-    if (permissionService.cameraStatus.isGranted) {
-      _initializeControllerFuture = _initializeCamera();
-    }
+    // Initialisation déplacée dans le build
   }
-  
-  // Cette méthode ne demande PLUS la permission. Elle suppose qu'elle est accordée.
+
   Future<void> _initializeCamera() async {
     final cameras = await availableCameras();
     if (cameras.isEmpty) throw Exception("Aucune caméra disponible.");
-    
-    _cameraController?.dispose(); // Sécurité pour éviter les fuites
+
+    _cameraController?.dispose(); // Sécurité
     final firstCamera = cameras.first;
     _cameraController = CameraController(
-      firstCamera, 
-      ResolutionPreset.high, 
+      firstCamera,
+      ResolutionPreset.high,
       enableAudio: false,
     );
-    return _cameraController!.initialize();
+    await _cameraController!.initialize();
+    setState(() {}); // Redessine après init
   }
-  
+
   @override
   void dispose() {
     _cameraController?.dispose();
@@ -62,33 +55,31 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
     super.build(context);
     return Consumer2<CaptureState, PermissionService>(
       builder: (context, captureState, permissionService, child) {
-        // --- NOUVELLE LOGIQUE DE PERMISSION ---
-        // Si la permission caméra n'est pas accordée, on affiche un écran dédié.
+        // Demande ou attend la permission caméra
         if (!permissionService.cameraStatus.isGranted) {
           return _buildPermissionRequestView(permissionService);
         }
-        
-        // Si la permission vient d'être accordée, on doit lancer l'initialisation.
+
+        // Initialiser la caméra dès que la permission est accordée
         if (_cameraController == null || !_cameraController!.value.isInitialized) {
           _initializeControllerFuture ??= _initializeCamera();
         }
 
-        // Le reste de votre logique est maintenant correcte.
         if (captureState.isUploading) {
           return _buildUploadProgressView(captureState);
-        } 
+        }
+
         switch (captureState.mode) {
           case CaptureMode.mission:
           case CaptureMode.freeScan:
             return _buildCameraView(captureState);
           case CaptureMode.idle:
             return _buildIdleSelectionView();
-        } 
+        }
       },
     );
   }
 
-  // NOUVEAU WIDGET pour demander la permission.
   Widget _buildPermissionRequestView(PermissionService permissionService) {
     return Scaffold(
       appBar: AppBar(title: const Text('Permission Requise')),
@@ -100,9 +91,16 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
             children: [
               const Icon(Icons.no_photography_outlined, size: 80, color: Colors.grey),
               const SizedBox(height: 16),
-              const Text("Accès à la caméra requis", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              const Text(
+                "Accès à la caméra requis",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 8),
-              const Text("Pour scanner le monde en 3D, Immersya a besoin d'accéder à votre appareil photo.", textAlign: TextAlign.center),
+              const Text(
+                "Pour scanner le monde en 3D, Immersya a besoin d'accéder à votre appareil photo.",
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: () => permissionService.requestCameraPermission(),
@@ -122,7 +120,6 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
     );
   }
 
-  // --- NOUVELLE VUE : L'Écran de Sélection ---
   Widget _buildIdleSelectionView() {
     return Scaffold(
       appBar: AppBar(title: const Text('Lancer une Capture')),
@@ -137,19 +134,9 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
               const SizedBox(height: 8),
               const Text('Scannez librement votre environnement.', style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 16),
-              _buildScanTypeButton(
-                context: context,
-                icon: Icons.chair_outlined,
-                label: 'Scanner un Intérieur / Objet',
-                type: FreeScanType.interior,
-              ),
+              _buildScanTypeButton(context, Icons.chair_outlined, 'Scanner un Intérieur / Objet', FreeScanType.interior),
               const SizedBox(height: 12),
-              _buildScanTypeButton(
-                context: context,
-                icon: Icons.face_retouching_natural,
-                label: 'Scanner un Avatar',
-                type: FreeScanType.avatar,
-              ),
+              _buildScanTypeButton(context, Icons.face_retouching_natural, 'Scanner un Avatar', FreeScanType.avatar),
               const SizedBox(height: 32),
               const Divider(),
               const SizedBox(height: 16),
@@ -165,8 +152,7 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
                   textStyle: const TextStyle(fontSize: 16),
                 ),
                 onPressed: () {
-                   // Navigue vers l'onglet des classements (index 2 dans notre nouvelle config)
-                   mainShellNavigatorKey.currentState?.goToTab(2); 
+                  mainShellNavigatorKey.currentState?.goToTab(2);
                 },
               ),
             ],
@@ -176,7 +162,7 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
     );
   }
 
-  Widget _buildScanTypeButton({required BuildContext context, required IconData icon, required String label, required FreeScanType type}) {
+  Widget _buildScanTypeButton(BuildContext context, IconData icon, String label, FreeScanType type) {
     return OutlinedButton.icon(
       icon: Icon(icon),
       label: Text(label),
@@ -192,7 +178,6 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
     );
   }
 
-  // Vue de la caméra
   Widget _buildCameraView(CaptureState captureState) {
     return Scaffold(
       body: FutureBuilder<void>(
@@ -213,13 +198,12 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
       ),
     );
   }
-  
-  // Vue de l'upload
+
   Widget _buildUploadProgressView(CaptureState captureState) {
     String title = captureState.mode == CaptureMode.mission
-      ? 'Mission: "${captureState.activeMission!.title}"'
-      : 'Scan Libre: ${captureState.freeScanType.name}';
-      
+        ? 'Mission: "${captureState.activeMission!.title}"'
+        : 'Scan Libre: ${captureState.freeScanType.name}';
+
     return Scaffold(
       body: Center(
         child: Padding(
@@ -231,7 +215,11 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
               const SizedBox(height: 8),
               Text(title, style: TextStyle(color: Colors.grey[400]), textAlign: TextAlign.center),
               const SizedBox(height: 32),
-              LinearProgressIndicator(value: captureState.uploadProgress, minHeight: 10, borderRadius: BorderRadius.circular(5)),
+              LinearProgressIndicator(
+                value: captureState.uploadProgress,
+                minHeight: 10,
+                borderRadius: BorderRadius.circular(5),
+              ),
               const SizedBox(height: 16),
               Text('${(captureState.uploadProgress * 100).toStringAsFixed(0)} %', style: const TextStyle(fontSize: 20)),
             ],
@@ -240,8 +228,7 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
       ),
     );
   }
-  
-  // HUD (Heads-Up Display)
+
   Widget _buildHud(CaptureState captureState) {
     return Padding(
       padding: const EdgeInsets.all(20.0).copyWith(top: 40),
@@ -255,18 +242,16 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
               label: const Text('Annuler'),
               onPressed: () {
                 context.read<CaptureState>().cancelCapture();
-                setState(() { _photoCount = 0; });
+                setState(() => _photoCount = 0);
               },
-             style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-              backgroundColor: Colors.black.withAlpha(128),
-            ),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.black.withAlpha(128),
+              ),
             ),
           ),
-          
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (_photoCount > 0)
                 ElevatedButton(
@@ -274,69 +259,63 @@ class _CaptureScreenState extends State<CaptureScreen>  with AutomaticKeepAliveC
                     final captureState = context.read<CaptureState>();
                     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-                    // 1. Récupérer la position GPS actuelle
-                    Position? currentPosition;
                     try {
-                      currentPosition = await Geolocator.getCurrentPosition(
-                        desiredAccuracy: LocationAccuracy.high
+                      final currentPosition = await Geolocator.getCurrentPosition(
+                        desiredAccuracy: LocationAccuracy.high,
                       );
-                    } catch (e) {
-                      //print("Erreur de récupération de la position GPS: $e");
+
+                      if (mounted) {
+                        await captureState.completeCapture(
+                          photoCount: _photoCount,
+                          location: LatLng(currentPosition.latitude, currentPosition.longitude),
+                        );
+                        setState(() => _photoCount = 0);
+                        scaffoldMessenger.showSnackBar(
+                          SnackBar(
+                            content: const Text("Scan uploadé avec succès !"),
+                            backgroundColor: Colors.green[700],
+                          ),
+                        );
+                      }
+                    } catch (_) {
                       scaffoldMessenger.showSnackBar(
                         const SnackBar(
                           content: Text("Erreur: Impossible d'obtenir la position GPS."),
                           backgroundColor: Colors.red,
                         ),
                       );
-                      return; // Arrêter le processus
                     }
-
-                    // 2. Appeler la nouvelle méthode `completeCapture` avec la localisation
-                    // ignore: unnecessary_null_comparison
-                    if (mounted && currentPosition != null) {
-                       await captureState.completeCapture(
-                        photoCount: _photoCount,
-                        location: LatLng(currentPosition.latitude, currentPosition.longitude),
-                      );
-                    }
-                    
-                    // 3. Réinitialiser le compteur de photos local
-                    if (mounted) {
-                      setState(() { _photoCount = 0; });
-                    }
-
-                    // 4. Afficher un message de succès générique
-                    scaffoldMessenger.showSnackBar(
-                      SnackBar(
-                        content: const Text("Scan uploadé avec succès !"),
-                        backgroundColor: Colors.green[700],
-                      ),
-                    );
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                   child: const Text('Terminer & Uploader'),
                 ),
               GestureDetector(
                 onTap: () async {
-                  if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+                  if (_cameraController?.value.isInitialized != true) return;
                   try {
                     await _cameraController!.takePicture();
-                    if(mounted) setState(() { _photoCount++; });
-                  } catch (e) {
-                    //print("Erreur lors de la prise de photo: $e");
-                  }
+                    if (mounted) setState(() => _photoCount++);
+                  } catch (_) {}
                 },
                 child: Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withAlpha(77),
-                  border: Border.all(color: Colors.white, width: 4),
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withAlpha(77),
+                    border: Border.all(color: Colors.white, width: 4),
+                  ),
                 ),
               ),
+              Text(
+                '$_photoCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  shadows: [Shadow(blurRadius: 5)],
+                ),
               ),
-              Text('$_photoCount', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 5)])),
             ],
           )
         ],

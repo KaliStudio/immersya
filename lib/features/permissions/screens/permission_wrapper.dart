@@ -14,14 +14,15 @@ class PermissionWrapper extends StatefulWidget {
 }
 
 class _PermissionWrapperState extends State<PermissionWrapper> {
-  // Un Future pour gérer l'état de la demande de permission
   Future<bool>? _permissionsFuture;
 
   @override
   void initState() {
     super.initState();
-    // On lance la demande de permissions dès que le widget est créé
-    _permissionsFuture = context.read<PermissionService>().requestEssentialPermissions();
+    final perm = context.read<PermissionService>();
+    perm.requestCameraPermission();
+    perm.requestLocationPermission();
+    perm.requestEssentialPermissions();
   }
 
   @override
@@ -29,40 +30,28 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
     return FutureBuilder<bool>(
       future: _permissionsFuture,
       builder: (context, snapshot) {
-        // Cas 1: La demande est en cours
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // Cas 2: La demande est terminée
-        if (snapshot.hasData) {
-          final bool allGranted = snapshot.data!;
-          // Si toutes les permissions sont accordées, on affiche l'application principale
-          if (allGranted) {
-            return const MainShell();
-          }
-          // Sinon, on affiche un écran expliquant pourquoi les permissions sont nécessaires
-          else {
-            return _buildPermissionDeniedScreen();
-          }
+        if (snapshot.hasData && snapshot.data == true) {
+          return const MainShell();
         }
 
-        // Cas 3: Erreur (peu probable mais à gérer)
         if (snapshot.hasError) {
-          return Scaffold(body: Center(child: Text("Erreur de permissions: ${snapshot.error}")));
+          return Scaffold(
+            body: Center(child: Text("Erreur de permissions: ${snapshot.error}")),
+          );
         }
 
-        // Cas par défaut
-        return const Scaffold(body: Center(child: Text("Initialisation...")));
+        return _buildPermissionDeniedScreen();
       },
     );
   }
 
-  // Écran à afficher si l'utilisateur refuse les permissions
   Widget _buildPermissionDeniedScreen() {
-    final permissionService = context.read<PermissionService>();
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -85,10 +74,21 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () async {
-                // Ouvre les paramètres de l'application
                 await openAppSettings();
               },
               child: const Text("Ouvrir les Réglages"),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () async {
+                final result = await context.read<PermissionService>().requestEssentialPermissions();
+                if (result) {
+                  setState(() {
+                    _permissionsFuture = Future.value(true);
+                  });
+                }
+              },
+              child: const Text("Réessayer"),
             ),
           ],
         ),

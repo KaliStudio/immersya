@@ -11,6 +11,7 @@ import 'package:immersya_mobile_app/features/profile/state/profile_state.dart';
 import 'package:immersya_mobile_app/features/team/state/team_state.dart';
 import 'package:immersya_mobile_app/features/permissions/permission_service.dart';
 import 'package:immersya_mobile_app/features/missions/state/mission_state.dart';
+import 'package:immersya_mobile_app/features/permissions/widgets/permission_initializer.dart';
 
 
 void main() {
@@ -65,7 +66,9 @@ void main() {
           ),
         ),
       ],
-      child: const ImmersyaPathfinderApp(),
+      child: PermissionInitializer(
+        child: const ImmersyaPathfinderApp(),
+      ),
     ),
   );
 }

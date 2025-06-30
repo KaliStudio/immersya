@@ -15,6 +15,8 @@ import 'package:provider/provider.dart';
 import 'package:immersya_mobile_app/features/map/state/map_state.dart';
 import 'package:immersya_mobile_app/features/map/widgets/map_filter_chips.dart';
 import 'package:immersya_mobile_app/features/map/widgets/heatmap_layer.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
+
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -238,7 +240,8 @@ void _onMissionTapped(Mission mission) {
                   },
                 ),
                 children: [
-                  TileLayer(urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', subdomains: const ['a', 'b', 'c', 'd'], retinaMode: RetinaMode.isHighDensity(context)),
+                  TileLayer(tileProvider: CancellableNetworkTileProvider(),
+                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', subdomains: const ['a', 'b', 'c', 'd'], retinaMode: RetinaMode.isHighDensity(context)),
                   if (mapState.isFilterActive(MapFilter.teamHeatmap)) HeatmapLayer(points: mapState.teamCapturePoints, controller: _mapController),
                   if (mapState.isFilterActive(MapFilter.heatmap)) HeatmapLayer(points: mapState.capturePoints, controller: _mapController),
                   if (mapState.isFilterActive(MapFilter.ghostTraces)) PolylineLayer(polylines: mapState.ghostTraces.map((trace) => Polyline(points: trace.path, color: Colors.blueAccent.withAlpha(102), strokeWidth: 3.0)).toList()),
@@ -246,7 +249,7 @@ void _onMissionTapped(Mission mission) {
                     PolygonLayer(polygons: mapState.zones.map((zone) {
                       final color = _getColorForStatus(zone.coverageStatus);
                       final bool isSessionActive = zone.sessionStatus == ZoneSessionStatus.active;
-                      return Polygon(points: zone.polygon, color: color, borderStrokeWidth: isSessionActive ? 4.0 : 1.5, borderColor: isSessionActive ? Colors.white : color.withAlpha(204), isFilled: true);
+                      return Polygon(points: zone.polygon, color: color, borderStrokeWidth: isSessionActive ? 4.0 : 1.5, borderColor: isSessionActive ? Colors.white : color.withAlpha(204));
                     }).toList()),
                   if (mapState.isFilterActive(MapFilter.missions)) 
                     MarkerLayer(

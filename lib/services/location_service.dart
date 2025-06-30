@@ -31,7 +31,9 @@ class LocationService {
     } 
 
     try {
-      return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      return await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)
+    );
     } catch (e) {
       debugPrint("LocationService: Erreur lors de la récupération de la position : $e");
       return null;
@@ -46,7 +48,6 @@ class LocationService {
         List<Placemark> placemarks = await placemarkFromCoordinates(
           position.latitude,
           position.longitude,
-          localeIdentifier: "fr_FR",
         );
         if(placemarks.isNotEmpty) return placemarks.first;
       } catch (e) {

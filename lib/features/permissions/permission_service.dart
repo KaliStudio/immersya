@@ -22,13 +22,10 @@ class PermissionService with ChangeNotifier {
 
   Future<void> requestCameraPermission() async {
     if (await Permission.camera.isPermanentlyDenied) {
-      // Si c'est bloqué, on ouvre les paramètres
       await openAppSettings();
     } else {
-      // Sinon, on demande la permission
       _cameraStatus = await Permission.camera.request();
     }
-    // On revérifie le statut final après l'action de l'utilisateur
     await checkAllPermissions();
   }
 
@@ -41,23 +38,28 @@ class PermissionService with ChangeNotifier {
     await checkAllPermissions();
   }
 
-  // CORRECTION : La méthode openAppSettings() du service ne doit pas s'appeler elle-même.
-  // Elle doit appeler la fonction du package permission_handler.
   Future<void> openDeviceSettings() async {
     await openAppSettings();
   }
 
-  // Votre méthode requestEssentialPermissions est bonne, on la garde.
+  /// ✅ Demande combinée, avec gestion des refus définitifs
   Future<bool> requestEssentialPermissions() async {
-    Map<Permission, PermissionStatus> statuses = await [
-      Permission.camera,
-      Permission.location,
-    ].request();
+    _cameraStatus = await Permission.camera.status;
+    _locationStatus = await Permission.location.status;
 
-    _cameraStatus = statuses[Permission.camera] ?? PermissionStatus.denied;
-    _locationStatus = statuses[Permission.location] ?? PermissionStatus.denied;
+    debugPrint("📷 Caméra: $_cameraStatus | 📍 Localisation: $_locationStatus");
+
+    if (_cameraStatus.isPermanentlyDenied || _locationStatus.isPermanentlyDenied) {
+      notifyListeners();
+      return false;
+    }
+
+    _cameraStatus = await Permission.camera.request();
+    _locationStatus = await Permission.location.request();
+
+    debugPrint("🆕 Résultat: caméra=$_cameraStatus / localisation=$_locationStatus");
+
     notifyListeners();
-
     return _cameraStatus.isGranted && _locationStatus.isGranted;
   }
 }

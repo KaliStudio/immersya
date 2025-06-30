@@ -20,7 +20,7 @@ class HeatmapLayer extends StatelessWidget {
     // --- MODIFICATION : On utilise le contrôleur pour obtenir la caméra ---
     final camera = controller.camera;
     final mapSizePoint = camera.size;
-    final mapSize = Size(mapSizePoint.x, mapSizePoint.y);
+    final mapSize = Size(mapSizePoint.width, mapSizePoint.height);
 
     return CustomPaint(
       // On passe la caméra directement au peintre
@@ -46,8 +46,8 @@ class _HeatmapPainter extends CustomPainter {
         continue;
       }
 
-      final pointOnScreen = camera.project(point.location);
-      final offset = Offset(pointOnScreen.x, pointOnScreen.y);
+      final pointOnScreen = camera.projectAtZoom(point.location);
+      final offset = Offset(pointOnScreen.dx, pointOnScreen.dy);
 
       final gradient = RadialGradient(
         colors: [

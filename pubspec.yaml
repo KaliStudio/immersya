@@ -15,13 +15,13 @@ dependencies:
   cupertino_icons: ^1.0.2
 
   # ----- NOUVELLE STACK CARTOGRAPHIQUE -----
-  flutter_map: ^6.1.0  # La librairie principale pour la carte
+  flutter_map: ^8.1.1  # La librairie principale pour la carte
   latlong2: ^0.9.0    # Requis par flutter_map pour la gestion des coordonnées
 
   # Accès aux capteurs et fonctionnalités natives
-  camera: ^0.10.0
-  geolocator: ^11.0.0
-  permission_handler: ^11.3.1
+  camera: ^0.11.1
+  geolocator: ^14.0.1
+  permission_handler: ^12.0.0+1
 
   # Réseau & Données
   http: ^1.2.0
@@ -33,18 +33,19 @@ dependencies:
   path_provider: ^2.1.3
 
   # ... autres dépendances
-  intl: ^0.18.1 # ou la version la plus récente
+  intl: ^0.20.2 # ou la version la plus récente
   model_viewer_plus: ^1.7.0 # ou la version la plus récente
   shared_preferences: ^2.2.3 # ou la version la plus récente
-  flutter_launcher_icons: ^0.13.1 # ou la version la plus récente
+  flutter_launcher_icons: ^0.14.4 # ou la version la plus récente
   polygon: ^0.1.0
-  geocoding: ^2.1.0
+  geocoding: ^4.0.0
   visibility_detector: ^0.4.0+2
+  flutter_map_cancellable_tile_provider: ^3.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
