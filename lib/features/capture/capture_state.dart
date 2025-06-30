@@ -3,6 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:immersya_mobile_app/api/mock_api_service.dart';
 import 'package:immersya_mobile_app/features/auth/services/auth_service.dart';
+import 'package:immersya_mobile_app/features/missions/state/mission_state.dart';
 import 'package:latlong2/latlong.dart';
 
 enum CaptureMode { idle, mission, freeScan }
@@ -14,6 +15,7 @@ class CaptureState with ChangeNotifier {
   // =============================================================
   MockApiService? _apiService;
   AuthService? _authService;
+  MissionState? _missionState;
 
   // =============================================================
   // ÉTAT DE LA CAPTURE
@@ -21,13 +23,9 @@ class CaptureState with ChangeNotifier {
   CaptureMode _mode = CaptureMode.idle;
   Mission? _activeMission;
   FreeScanType _freeScanType = FreeScanType.none;
-  
-  // NOUVEAU : Statut de capture pour la fonctionnalité de groupe.
   bool _isCapturing = false;
-
   int lastGainedPoints = 0;
   LatLng? lastCaptureLocation;
-  
   bool _isUploading = false;
   double _uploadProgress = 0.0;
 
@@ -39,66 +37,55 @@ class CaptureState with ChangeNotifier {
   FreeScanType get freeScanType => _freeScanType;
   bool get isUploading => _isUploading;
   double get uploadProgress => _uploadProgress;
-  // NOUVEAU GETTER
   bool get isCapturing => _isCapturing;
 
   // =============================================================
   // INITIALISATION
   // =============================================================
-  void init(MockApiService apiService, AuthService authService) {
+  // 2. MISE À JOUR DE LA SIGNATURE DE INIT
+  void init(MockApiService apiService, AuthService authService, MissionState missionState) {
     _apiService = apiService;
     _authService = authService;
+    _missionState = missionState;
   }
   
   // =============================================================
   // ACTIONS UTILISATEUR
   // =============================================================
-
-  /// Démarre une session de capture pour une mission.
   void startMission(Mission mission) {
-    // Appelle la méthode de capture générique
     _startCapture(CaptureMode.mission, mission: mission);
   }
   
-  /// Démarre une session de capture libre.
   void startFreeScan(FreeScanType type) {
-    // Appelle la méthode de capture générique
     _startCapture(CaptureMode.freeScan, freeScanType: type);
   }
 
-  /// Logique interne pour démarrer n'importe quel type de capture.
   void _startCapture(CaptureMode mode, {Mission? mission, FreeScanType freeScanType = FreeScanType.none}) {
     final userId = _authService?.currentUser?.id;
     if (userId == null) return;
-
     _mode = mode;
     _activeMission = mission;
     _freeScanType = freeScanType;
     _isCapturing = true;
-
-    // Notifie l'API que l'utilisateur commence à capturer.
     _apiService?.updateCaptureStatus(userId, true);
-    
     notifyListeners();
   }
 
-  /// Annule la capture en cours.
   void cancelCapture() {
     _stopCapture(isCancelled: true);
   }
 
-  /// Complète la capture et traite les résultats.
   Future<void> completeCapture({required int photoCount, required LatLng location}) async {
     await _stopCapture(isCancelled: false, photoCount: photoCount, location: location);
   }
 
-  /// Logique interne pour arrêter une capture (complétée ou annulée).
   Future<void> _stopCapture({bool isCancelled = false, int photoCount = 0, LatLng? location}) async {
     final userId = _authService?.currentUser?.id;
     if (userId == null) return;
     
-    // Notifie l'API que l'utilisateur a fini de capturer.
-    // On le fait au début pour une meilleure réactivité sur la carte.
+    final wasMission = _mode == CaptureMode.mission;
+    final completedMission = _activeMission;
+
     _apiService?.updateCaptureStatus(userId, false);
     _isCapturing = false;
 
@@ -110,12 +97,10 @@ class CaptureState with ChangeNotifier {
       return;
     }
     
-    // --- Logique de complétion de la capture ---
     _isUploading = true;
     _uploadProgress = 0.0;
     notifyListeners();
 
-    // Simuler l'upload
     for (int i = 0; i <= photoCount; i++) {
       await Future.delayed(const Duration(milliseconds: 20));
       _uploadProgress = i / photoCount;
@@ -123,22 +108,21 @@ class CaptureState with ChangeNotifier {
     }
     await Future.delayed(const Duration(milliseconds: 200));
 
-    // Déterminer les points et enregistrer la localisation
     lastGainedPoints = (_mode == CaptureMode.mission) ? _activeMission!.rewardPoints : 50;
     lastCaptureLocation = location;
     
     _isUploading = false;
-    
-    // Notifier les autres parties de l'app (comme ProfileScreen) du résultat.
     notifyListeners();
     
-    // Rafraîchir le profil de l'utilisateur pour mettre à jour ses points/stats.
     _authService?.refreshCurrentUser();
-
-    // Réinitialiser l'état de la capture.
+    
+    // --- 3. AJOUT DE LA LOGIQUE DE COMPLÉTION DE MISSION ---
+    if (wasMission && completedMission != null) {
+      _missionState?.missionWasCompleted(completedMission.id);
+    }
+    
     _mode = CaptureMode.idle;
     _activeMission = null;
     _freeScanType = FreeScanType.none;
-    // Pas besoin d'un `notifyListeners` final car `refreshCurrentUser` s'en chargera.
   }
 }

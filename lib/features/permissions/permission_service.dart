@@ -35,4 +35,20 @@ class PermissionService with ChangeNotifier {
   Future<void> openAppSettings() async {
     await openAppSettings();
   }
+
+    Future<bool> requestEssentialPermissions() async {
+    // On demande les permissions en parallèle.
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.camera,
+      Permission.location,
+    ].request();
+
+    // On met à jour nos statuts internes.
+    _cameraStatus = statuses[Permission.camera] ?? PermissionStatus.denied;
+    _locationStatus = statuses[Permission.location] ?? PermissionStatus.denied;
+    notifyListeners();
+
+    // On vérifie si tout est bien accordé.
+    return _cameraStatus.isGranted && _locationStatus.isGranted;
+  }
 }
