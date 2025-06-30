@@ -22,11 +22,21 @@ class PermissionService with ChangeNotifier {
   }
 
   Future<void> requestCameraPermission() async {
+    // Si la permission est déjà bloquée, on ouvre directement les paramètres.
+    if (await Permission.camera.isPermanentlyDenied) {
+      await openAppSettings();
+      return;
+    }
     _cameraStatus = await Permission.camera.request();
     notifyListeners();
   }
 
   Future<void> requestLocationPermission() async {
+    // Si la permission est déjà bloquée, on ouvre directement les paramètres.
+    if (await Permission.location.isPermanentlyDenied) {
+      await openAppSettings();
+      return;
+    }
     _locationStatus = await Permission.location.request();
     notifyListeners();
   }
